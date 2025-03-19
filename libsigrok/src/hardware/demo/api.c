@@ -29,7 +29,7 @@
 #include "libsigrok-internal.h"
 #include "protocol.h"
 
-#define DEFAULT_NUM_LOGIC_CHANNELS		8
+#define DEFAULT_NUM_LOGIC_CHANNELS		10
 #define DEFAULT_LOGIC_PATTERN			PATTERN_SIGROK
 
 #define DEFAULT_NUM_ANALOG_CHANNELS		5
@@ -599,7 +599,7 @@ static int dev_acquisition_stop(struct sr_dev_inst *sdi)
 
 static struct sr_dev_driver demo_driver_info = {
 	.name = "demo",
-	.longname = "Demo driver testing version 2 and pattern generator",
+	.longname = "Demo driver testing 10 channels and pattern generator",
 	.api_version = 1,
 	.init = std_init,
 	.cleanup = std_cleanup,
