@@ -154,7 +154,8 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 		cg = sr_channel_group_new(sdi, "Logic", NULL);
 		for (i = 0; i < num_logic_channels; i++) {
 			sprintf(channel_name, "D%d", i);
-			ch = sr_channel_new(sdi, i, SR_CHANNEL_LOGIC, TRUE, channel_name);
+			ch = sr_channel_new(sdi, i, SR_CHANNEL_LOGIC,
+						(i != 8), channel_name);  /* Disable channel 8 by default */
 			cg->channels = g_slist_append(cg->channels, ch);
 		}
 	}
@@ -599,7 +600,7 @@ static int dev_acquisition_stop(struct sr_dev_inst *sdi)
 
 static struct sr_dev_driver demo_driver_info = {
 	.name = "demo",
-	.longname = "Demo driver testing 10 channels and pattern generator",
+	.longname = "Demo driver testing 10 channels,disabled 8 and pattern generator",
 	.api_version = 1,
 	.init = std_init,
 	.cleanup = std_cleanup,
