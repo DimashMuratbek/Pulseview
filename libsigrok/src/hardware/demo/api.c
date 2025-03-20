@@ -532,7 +532,7 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi)
 	devc->enabled_analog_channels = 0;
 	for (l = sdi->channels; l; l = l->next) {
 		ch = l->data;
-		if (!ch->enabled)
+		if (!ch->enabled || ch->index == 8) /* Disable the 9th channel (index 8) by default */
 			continue;
 		if (ch->type == SR_CHANNEL_ANALOG) {
 			devc->enabled_analog_channels++;
