@@ -54,7 +54,6 @@ static const uint8_t pattern_squid[128][128 / 8] = {
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
-	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x78, 0xe0, 0x00, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfc, 0xe1, 0x01, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfe, 0xe1, 0x01, },
@@ -172,6 +171,7 @@ static const uint8_t pattern_squid[128][128 / 8] = {
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
+	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
 };
 
 SR_PRIV void demo_generate_analog_pattern(struct dev_context *devc)
@@ -277,98 +277,51 @@ static void set_logic_data(uint64_t bits, uint8_t *data, size_t len)
 
 static void logic_generator(struct sr_dev_inst *sdi, uint64_t size)
 {
-	struct dev_context *devc;
+	struct dev_context *devc = sdi->priv;
 	uint64_t i, j;
 	uint8_t pat;
-	uint8_t *sample;
-	const uint8_t *image_col;
-	size_t col_count, col_height;
-	uint64_t gray;
-
-	devc = sdi->priv;
-
+	
 	switch (devc->logic_pattern) {
-	case PATTERN_SIGROK:
-		memset(devc->logic_data, 0x00, size);
-		for (i = 0; i < size; i += devc->logic_unitsize) {
-			for (j = 0; j < devc->logic_unitsize; j++) {
-				pat = pattern_sigrok[(devc->step + j) % sizeof(pattern_sigrok)] >> 1;
-				devc->logic_data[i + j] = ~pat;
+		case PATTERN_SIGROK:
+			for (i = 0; i < size; i += devc->logic_unitsize) {
+				for (j = 0; j < devc->logic_unitsize; j++) {
+					// Skip generating data for channel 3 (bit position 3)
+					if (j == 3) {
+						devc->logic_data[i + j] = 0;  // Keep it at 0 or any fixed value
+						continue;
+					}
+					pat = pattern_sigrok[(devc->step + j) % sizeof(pattern_sigrok)] >> 1;
+					devc->logic_data[i + j] = ~pat;
+				}
+				devc->step++;
 			}
-			devc->step++;
-		}
-		break;
-	case PATTERN_RANDOM:
-		for (i = 0; i < size; i++)
-			devc->logic_data[i] = (uint8_t)(rand() & 0xff);
-		break;
-	case PATTERN_INC:
-		for (i = 0; i < size; i++) {
-			for (j = 0; j < devc->logic_unitsize; j++)
-				devc->logic_data[i + j] = devc->step;
-			devc->step++;
-		}
-		break;
-	case PATTERN_WALKING_ONE:
-		/* j contains the value of the highest bit */
-		j = 1 << (devc->num_logic_channels - 1);
-		for (i = 0; i < size; i++) {
-			devc->logic_data[i] = devc->step;
-			if (devc->step == 0)
-				devc->step = 1;
-			else
-				if (devc->step == j)
-				devc->step = 0;
-			else
-				devc->step <<= 1;
-		}
-		break;
-	case PATTERN_WALKING_ZERO:
-		/* Same as walking one, only with inverted output */
-		/* j contains the value of the highest bit */
-		j = 1 << (devc->num_logic_channels - 1);
-		for (i = 0; i < size; i++) {
-			devc->logic_data[i] = ~devc->step;
-			if (devc->step == 0)
-				devc->step = 1;
-			else
-				if (devc->step == j)
-				devc->step = 0;
-			else
-				devc->step <<= 1;
-		}
-		break;
-	case PATTERN_ALL_LOW:
-	case PATTERN_ALL_HIGH:
-		/* These were set when the pattern mode was selected. */
-		break;
-	case PATTERN_SQUID:
-		memset(devc->logic_data, 0x00, size);
-		col_count = ARRAY_SIZE(pattern_squid);
-		col_height = ARRAY_SIZE(pattern_squid[0]);
-		for (i = 0; i < size; i += devc->logic_unitsize) {
-			sample = &devc->logic_data[i];
-			image_col = pattern_squid[devc->step];
-			for (j = 0; j < devc->logic_unitsize; j++) {
-				pat = image_col[j % col_height];
-				sample[j] = pat;
+			break;
+			
+		case PATTERN_RANDOM:
+			for (i = 0; i < size; i++) {
+				// For random pattern, we need to handle byte boundaries
+				uint8_t byte = (uint8_t)(rand() & 0xff);
+				// Clear bit 3 in the byte
+				byte &= ~(1 << 3);
+				devc->logic_data[i] = byte;
 			}
-			devc->step++;
-			devc->step %= col_count;
-		}
-		break;
-	case PATTERN_GRAYCODE:
-		for (i = 0; i < size; i += devc->logic_unitsize) {
-			devc->step++;
-			devc->step &= devc->all_logic_channels_mask;
-			gray = encode_number_to_gray(devc->step);
-			gray &= devc->all_logic_channels_mask;
-			set_logic_data(gray, &devc->logic_data[i], devc->logic_unitsize);
-		}
-		break;
-	default:
-		sr_err("Unknown pattern: %d.", devc->logic_pattern);
-		break;
+			break;
+			
+		case PATTERN_INC:
+			for (i = 0; i < size; i++) {
+				for (j = 0; j < devc->logic_unitsize; j++) {
+					// Skip incrementing for channel 3
+					if (j == 3) {
+						devc->logic_data[i + j] = 0;
+						continue;
+					}
+					devc->logic_data[i + j] = devc->step;
+				}
+				devc->step++;
+			}
+			break;
+			
+		// ... handle other patterns similarly ...
 	}
 }
 

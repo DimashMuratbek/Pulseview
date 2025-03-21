@@ -149,6 +149,7 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	devc->capture_ratio = 20;
 	devc->stl = NULL;
 
+	/* Here the logic channels are created */
 	if (num_logic_channels > 0) {
 		/* Logic channels, all in one channel group. */
 		cg = sr_channel_group_new(sdi, "Logic", NULL);
@@ -532,7 +533,7 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi)
 	devc->enabled_analog_channels = 0;
 	for (l = sdi->channels; l; l = l->next) {
 		ch = l->data;
-		if (!ch->enabled || ch->index == 3) /* Disable the 9th channel (index 8) by default */
+		if (!ch->enabled) /* Disable the 9th channel (index 8) by default */
 			continue;
 		if (ch->type == SR_CHANNEL_ANALOG) {
 			devc->enabled_analog_channels++;
