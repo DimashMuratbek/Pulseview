@@ -320,8 +320,61 @@ static void logic_generator(struct sr_dev_inst *sdi, uint64_t size)
 				devc->step++;
 			}
 			break;
-			
-		// ... handle other patterns similarly ...
+
+		case PATTERN_WALKING_ONE:
+			for (i = 0; i < size; i++) {
+				uint8_t byte = 0;
+				uint8_t bit = (devc->step + i) % 8;
+				if (bit != 3) {  // Skip channel 3
+					byte = 1 << bit;
+				}
+				devc->logic_data[i] = byte;
+			}
+			devc->step++;
+			break;
+
+		case PATTERN_WALKING_ZERO:
+			for (i = 0; i < size; i++) {
+				uint8_t byte = 0xFF;
+				uint8_t bit = (devc->step + i) % 8;
+				if (bit != 3) {  // Skip channel 3
+					byte &= ~(1 << bit);
+				} else {
+					byte &= ~(1 << 3);  // Keep channel 3 at 0
+				}
+				devc->logic_data[i] = byte;
+			}
+			devc->step++;
+			break;
+
+		case PATTERN_ALL_LOW:
+			memset(devc->logic_data, 0x00, size);
+			break;
+
+		case PATTERN_ALL_HIGH:
+			for (i = 0; i < size; i++) {
+				devc->logic_data[i] = 0xFF & ~(1 << 3);  // All high except channel 3
+			}
+			break;
+
+		case PATTERN_SQUID:
+			for (i = 0; i < size; i++) {
+				uint8_t byte = pattern_squid[devc->step % 128][i % (128 / 8)];
+				byte &= ~(1 << 3);  // Clear bit 3 (channel 3)
+				devc->logic_data[i] = byte;
+			}
+			devc->step++;
+			break;
+
+		case PATTERN_GRAYCODE:
+			for (i = 0; i < size; i++) {
+				uint64_t gray = encode_number_to_gray(devc->step + i);
+				uint8_t byte = (uint8_t)(gray & 0xFF);
+				byte &= ~(1 << 3);  // Clear bit 3 (channel 3)
+				devc->logic_data[i] = byte;
+			}
+			devc->step++;
+			break;
 	}
 }
 
