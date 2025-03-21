@@ -399,8 +399,8 @@ static void logic_fixup_feed(struct dev_context *devc,
 	for (off = 0; off < logic->length; off += logic->unitsize) {
 		sample = logic->data + off;
 
-		// Disable channel 9 (bit 4), force to be 0 
-		sample[0] &= ~(1 << 9);
+		// Disable channel 6 (bit 6), force to be 0 
+		sample[0] &= ~(1 << 6);
 		
 		//sample[fp_off] &= fp_mask;
 
