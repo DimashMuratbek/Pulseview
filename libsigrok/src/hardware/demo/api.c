@@ -529,12 +529,19 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi)
 	 * involved in the acquisition. Determine an offset and a mask to
 	 * remove excess logic data content before datafeed submission.
 	 */
+
+	 
+
 	devc->enabled_logic_channels = 0;
 	devc->enabled_analog_channels = 0;
 	for (l = sdi->channels; l; l = l->next) {
 		ch = l->data;
-		if (!ch->enabled) /* Disable the 9th channel (index 8) by default */
+		if (!ch->enabled) 
 			continue;
+		
+		if (ch->index == 3)  // Disable channel 3 (D2)
+        	continue; // Skip channel 3 entirely
+
 		if (ch->type == SR_CHANNEL_ANALOG) {
 			devc->enabled_analog_channels++;
 			continue;
@@ -600,7 +607,7 @@ static int dev_acquisition_stop(struct sr_dev_inst *sdi)
 
 static struct sr_dev_driver demo_driver_info = {
 	.name = "demo",
-	.longname = "Demo driver testing 10 channels,disabled 3 and pattern generator",
+	.longname = "Demo testing 10 channels,disabled 3 and pattern generator",
 	.api_version = 1,
 	.init = std_init,
 	.cleanup = std_cleanup,
