@@ -291,6 +291,11 @@ static void logic_generator(struct sr_dev_inst *sdi, uint64_t size)
 		memset(devc->logic_data, 0x00, size);
 		for (i = 0; i < size; i += devc->logic_unitsize) {
 			for (j = 0; j < devc->logic_unitsize; j++) {
+            	if (j == 3) {  // Disable channel 3 (D2)
+                	devc->logic_data[i + j] = 0;
+                	continue;
+           		 }	
+				 
 				pat = pattern_sigrok[(devc->step + j) % sizeof(pattern_sigrok)] >> 1;
 				devc->logic_data[i + j] = ~pat;
 			}
