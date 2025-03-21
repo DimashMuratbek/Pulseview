@@ -389,7 +389,7 @@ static void logic_fixup_feed(struct dev_context *devc,
 	size_t fp_off;
 	uint8_t fp_mask;
 	size_t off, idx;
-	uint8_t *sample;
+	uint16_t *sample;
 
 	fp_off = devc->first_partial_logic_index;
 	fp_mask = devc->first_partial_logic_mask;
@@ -400,7 +400,7 @@ static void logic_fixup_feed(struct dev_context *devc,
 		sample = logic->data + off;
 
 		// Disable channel 6 (bit 6), force to be 0 
-		sample[0] &= ~(1 << 6);
+		sample[0] &= ~(1 << 10);
 		
 		//sample[fp_off] &= fp_mask;
 
