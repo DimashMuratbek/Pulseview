@@ -53,6 +53,7 @@ static const uint8_t pattern_squid[128][128 / 8] = {
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
+	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x78, 0xe0, 0x00, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfc, 0xe1, 0x01, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfe, 0xe1, 0x01, },
@@ -160,7 +161,6 @@ static const uint8_t pattern_squid[128][128 / 8] = {
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0xf0, 0x03, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0xc0, 0x03, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, },
-	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
@@ -291,33 +291,83 @@ static void logic_generator(struct sr_dev_inst *sdi, uint64_t size)
 		memset(devc->logic_data, 0x00, size);
 		for (i = 0; i < size; i += devc->logic_unitsize) {
 			for (j = 0; j < devc->logic_unitsize; j++) {
-				pat = pattern_sigrok[(devc->step + j) % sizeof(pattern_sigrok)];
-				/* Ensure we don't mask out D7 */
-				if (j == 0) {
-					devc->logic_data[i + j] = ~pat;
-				} else {
-					devc->logic_data[i + j] = pat;
-				}
+				pat = pattern_sigrok[(devc->step + j) % sizeof(pattern_sigrok)] >> 1;
+				devc->logic_data[i + j] = ~pat;
 			}
 			devc->step++;
 		}
 		break;
 	case PATTERN_RANDOM:
-		for (i = 0; i < size; i += devc->logic_unitsize) {
-			for (j = 0; j < devc->logic_unitsize; j++) {
-				devc->logic_data[i + j] = (uint8_t)(rand() & 0xff);
-			}
-		}
+		for (i = 0; i < size; i++)
+			devc->logic_data[i] = (uint8_t)(rand() & 0xff);
 		break;
 	case PATTERN_INC:
-		for (i = 0; i < size; i += devc->logic_unitsize) {
-			for (j = 0; j < devc->logic_unitsize; j++) {
+		for (i = 0; i < size; i++) {
+			for (j = 0; j < devc->logic_unitsize; j++)
 				devc->logic_data[i + j] = devc->step;
-			}
 			devc->step++;
 		}
 		break;
-	// ... rest of the cases remain the same ...
+	case PATTERN_WALKING_ONE:
+		/* j contains the value of the highest bit */
+		j = 1 << (devc->num_logic_channels - 1);
+		for (i = 0; i < size; i++) {
+			devc->logic_data[i] = devc->step;
+			if (devc->step == 0)
+				devc->step = 1;
+			else
+				if (devc->step == j)
+					devc->step = 0;
+				else
+					devc->step <<= 1;
+		}
+		break;
+	case PATTERN_WALKING_ZERO:
+		/* Same as walking one, only with inverted output */
+		/* j contains the value of the highest bit */
+		j = 1 << (devc->num_logic_channels - 1);
+		for (i = 0; i < size; i++) {
+			devc->logic_data[i] = ~devc->step;
+			if (devc->step == 0)
+				devc->step = 1;
+			else
+				if (devc->step == j)
+					devc->step = 0;
+				else
+					devc->step <<= 1;
+		}
+		break;
+	case PATTERN_ALL_LOW:
+	case PATTERN_ALL_HIGH:
+		/* These were set when the pattern mode was selected. */
+		break;
+	case PATTERN_SQUID:
+		memset(devc->logic_data, 0x00, size);
+		col_count = ARRAY_SIZE(pattern_squid);
+		col_height = ARRAY_SIZE(pattern_squid[0]);
+		for (i = 0; i < size; i += devc->logic_unitsize) {
+			sample = &devc->logic_data[i];
+			image_col = pattern_squid[devc->step];
+			for (j = 0; j < devc->logic_unitsize; j++) {
+				pat = image_col[j % col_height];
+				sample[j] = pat;
+			}
+			devc->step++;
+			devc->step %= col_count;
+		}
+		break;
+	case PATTERN_GRAYCODE:
+		for (i = 0; i < size; i += devc->logic_unitsize) {
+			devc->step++;
+			devc->step &= devc->all_logic_channels_mask;
+			gray = encode_number_to_gray(devc->step);
+			gray &= devc->all_logic_channels_mask;
+			set_logic_data(gray, &devc->logic_data[i], devc->logic_unitsize);
+		}
+		break;
+	default:
+		sr_err("Unknown pattern: %d.", devc->logic_pattern);
+		break;
 	}
 }
 
@@ -333,7 +383,7 @@ static void logic_fixup_feed(struct dev_context *devc,
 {
 	size_t fp_off;
 	uint8_t fp_mask;
-	size_t off;
+	size_t off, idx;
 	uint8_t *sample;
 
 	fp_off = devc->first_partial_logic_index;
@@ -343,24 +393,14 @@ static void logic_fixup_feed(struct dev_context *devc,
 
 	for (off = 0; off < logic->length; off += logic->unitsize) {
 		sample = logic->data + off;
+
+		// Disable channel 3 (bit 3)
+		sample[fp_off] &= ~(1 << 3);
 		
-		/* Handle the partial byte if it exists */
-		if (fp_off < logic->unitsize) {
-			sample[fp_off] &= fp_mask;
-		}
-		
-		/* Zero out any remaining bytes beyond the last enabled channel */
-		if (fp_off + 1 < logic->unitsize) {
-			uint8_t last_byte_mask = 0xFF;
-			if (devc->enabled_logic_channels % 8 != 0)
-				last_byte_mask = (1 << (devc->enabled_logic_channels % 8)) - 1;
-			sample[fp_off + 1] &= last_byte_mask;
-		}
-		
-		/* Zero out any remaining bytes */
-		for (size_t i = fp_off + 2; i < logic->unitsize; i++) {
-			sample[i] = 0;
-		}
+		//sample[fp_off] &= fp_mask;
+
+		for (idx = fp_off + 1; idx < logic->unitsize; idx++)
+			sample[idx] = 0x00;
 	}
 }
 
