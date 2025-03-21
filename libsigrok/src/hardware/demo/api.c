@@ -29,7 +29,7 @@
 #include "libsigrok-internal.h"
 #include "protocol.h"
 
-#define DEFAULT_NUM_LOGIC_CHANNELS		10
+#define DEFAULT_NUM_LOGIC_CHANNELS		13
 #define DEFAULT_LOGIC_PATTERN			PATTERN_SIGROK
 
 #define DEFAULT_NUM_ANALOG_CHANNELS		5
@@ -530,7 +530,7 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi)
 	 * remove excess logic data content before datafeed submission.
 	 */
 
-	 
+
 
 	devc->enabled_logic_channels = 0;
 	devc->enabled_analog_channels = 0;
@@ -539,7 +539,7 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi)
 		if (!ch->enabled) 
 			continue;
 		
-		if (ch->index == 3)  // Disable channel 3 (D2)
+		if (ch->index == 3)  // Disable channel 3
         	continue; // Skip channel 3 entirely
 
 		if (ch->type == SR_CHANNEL_ANALOG) {
