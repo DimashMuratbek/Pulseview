@@ -295,7 +295,7 @@ static void logic_generator(struct sr_dev_inst *sdi, uint64_t size)
                 	devc->logic_data[i + j] = 0;
                 	continue;
            		 }	
-				 
+
 				pat = pattern_sigrok[(devc->step + j) % sizeof(pattern_sigrok)] >> 1;
 				devc->logic_data[i + j] = ~pat;
 			}
@@ -400,7 +400,7 @@ static void logic_fixup_feed(struct dev_context *devc,
 		sample = logic->data + off;
 
 		// Disable channel 3 (bit 3)
-		sample[fp_off] &= ~(1 << 3);
+		sample[0] &= ~(1 << 3);
 		
 		//sample[fp_off] &= fp_mask;
 
