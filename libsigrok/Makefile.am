@@ -329,7 +329,13 @@ if HW_CONRAD_DIGI_35_CPU
 src_libdrivers_la_SOURCES += \
 	src/hardware/conrad-digi-35-cpu/protocol.h \
 	src/hardware/conrad-digi-35-cpu/protocol.c \
-	src/hardware/conrad-digi-35-cpu/api.c
+	src/hardware/conrad-digi-35-cpu/api.c	
+endif
+if HW_CYPRESS_FX3
+src_libdrivers_la_SOURCES += \
+	src/hardware/cypress-fx3/protocol.h \
+	src/hardware/cypress-fx3/protocol.c \
+	src/hardware/cypress-fx3/api.c	
 endif
 if HW_DCTTECH_USBRELAY
 src_libdrivers_la_SOURCES += \

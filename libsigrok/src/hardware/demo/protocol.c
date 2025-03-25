@@ -383,8 +383,7 @@ static void logic_generator(struct sr_dev_inst *sdi, uint64_t size)
  * TODO: Need we apply a channel map, and enforce a dense representation
  * of the enabled channels' data?
  */
-static void logic_fixup_feed(struct dev_context *devc,
-		struct sr_datafeed_logic *logic)
+static void logic_fixup_feed(struct dev_context *devc, struct sr_datafeed_logic *logic)
 {
 	size_t fp_off;
 	uint8_t fp_mask;
