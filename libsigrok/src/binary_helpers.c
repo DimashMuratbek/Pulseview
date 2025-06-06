@@ -22,8 +22,7 @@
 #include <libsigrok/libsigrok.h>
 #include "libsigrok-internal.h"
 
-SR_PRIV int bv_get_value_len(float *out, const struct binary_value_spec *spec,
-	const uint8_t *data, size_t length)
+SR_PRIV int bv_get_value(float *out, const struct binary_value_spec *spec, const void *data, size_t length)
 {
 	float value;
 
@@ -38,15 +37,17 @@ SR_PRIV int bv_get_value_len(float *out, const struct binary_value_spec *spec,
 		break
 
 	switch (spec->type) {
-	VALUE_TYPE(BVT_UINT8, read_u8, sizeof(uint8_t));
+		VALUE_TYPE(BVT_UINT8, R8, 1);
 
-	VALUE_TYPE(BVT_BE_UINT16, read_u16be, sizeof(uint16_t));
-	VALUE_TYPE(BVT_BE_UINT24, read_u24be, 3 * sizeof(uint8_t));
-	VALUE_TYPE(BVT_BE_UINT32, read_u32be, sizeof(uint32_t));
+		VALUE_TYPE(BVT_BE_UINT16, RB16, 2);
+		VALUE_TYPE(BVT_BE_UINT32, RB32, 4);
+		VALUE_TYPE(BVT_BE_UINT64, RB64, 8);
+		VALUE_TYPE(BVT_BE_FLOAT, RBFL, 4);
 
-	VALUE_TYPE(BVT_LE_UINT16, read_u16le, sizeof(uint16_t));
-	VALUE_TYPE(BVT_LE_UINT24, read_u24le, 3 * sizeof(uint8_t));
-	VALUE_TYPE(BVT_LE_UINT32, read_u32le, sizeof(uint32_t));
+		VALUE_TYPE(BVT_LE_UINT16, RL16, 2);
+		VALUE_TYPE(BVT_LE_UINT32, RL32, 4);
+		VALUE_TYPE(BVT_LE_UINT64, RL64, 8);
+		VALUE_TYPE(BVT_LE_FLOAT, RLFL, 4);
 
 	default:
 		return SR_ERR_ARG;
@@ -54,46 +55,51 @@ SR_PRIV int bv_get_value_len(float *out, const struct binary_value_spec *spec,
 
 #undef VALUE_TYPE
 
-	if (out)
-		*out = value;
+	*out = value * spec->scale;
 	return SR_OK;
 }
 
-SR_PRIV int bv_get_value(float *out, const struct binary_value_spec *spec,
-	const uint8_t *data)
+SR_PRIV int bv_send_analog_channel(const struct sr_dev_inst *sdi, struct sr_channel *ch,
+				   const struct binary_analog_channel *bac, const void *data, size_t length)
 {
+	int err;
+	struct sr_analog_encoding encoding;
+	struct sr_analog_meaning meaning;
+	struct sr_analog_spec spec;
+	struct sr_datafeed_analog analog;
+	struct sr_datafeed_packet packet = {
+		.type = SR_DF_ANALOG,
+		.payload = &analog,
+	};
 	float value;
-	const uint8_t *ptr;
 
-	ptr = &data[spec->offset];
+	err = bv_get_value(&value, &bac->spec, data, length);
+	if (err != SR_OK)
+		goto err_out;
 
-	switch (spec->type) {
-	case BVT_UINT8:
-		value = read_u8(ptr);
-		break;
-	case BVT_BE_UINT16:
-		value = read_u16be(ptr);
-		break;
-	case BVT_BE_UINT24:
-		value = read_u24be(ptr);
-		break;
-	case BVT_BE_UINT32:
-		value = read_u32be(ptr);
-		break;
-	case BVT_LE_UINT16:
-		value = read_u16le(ptr);
-		break;
-	case BVT_LE_UINT24:
-		value = read_u24le(ptr);
-		break;
-	case BVT_LE_UINT32:
-		value = read_u32le(ptr);
-		break;
-	default:
-		return SR_ERR_ARG;
-	}
+	err = sr_analog_init(&analog, &encoding, &meaning, &spec, bac->digits);
+	if (err != SR_OK)
+		goto err_out;
 
-	if (out)
-		*out = value;
+	meaning.mq = bac->mq;
+	meaning.unit = bac->unit;
+	meaning.mqflags = 0;
+	meaning.channels = g_slist_append(NULL, ch);
+
+	spec.spec_digits = bac->digits;
+
+	analog.data = &value;
+	analog.num_samples = 1;
+
+	err = sr_session_send(sdi, &packet);
+	if (err != SR_OK)
+		goto err_free;
+
 	return SR_OK;
+
+err_free:
+	g_slist_free(meaning.channels);
+
+err_out:
+	return err;
 }

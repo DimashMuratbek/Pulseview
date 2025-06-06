@@ -114,36 +114,6 @@ START_TEST(test_endian_read)
 }
 END_TEST
 
-START_TEST(test_endian_read_inc_len)
-{
-	const uint8_t *p;
-	size_t l;
-
-	/* Position to the start of the input stream. */
-	p = &buff1234[0];
-	l = sizeof(buff1234);
-
-	/* Read several fields of known type and values. */
-	fail_unless(l == 8);
-	fail_unless(read_u8_inc_len(&p, &l) == 0x11);
-	fail_unless(l == 7);
-	fail_unless(read_u8_inc_len(&p, &l) == 0x22);
-	fail_unless(l == 6);
-	fail_unless(read_u16le_inc_len(&p, &l) == 0x4433);
-	fail_unless(l == 4);
-	fail_unless(read_u16le_inc_len(&p, &l) == 0x6655);
-	fail_unless(l == 2);
-	fail_unless(read_u16le_inc_len(&p, &l) == 0x8877);
-	fail_unless(l == 0);
-
-	/* Read beyond the end of the input stream. */
-	fail_unless(read_u8_inc_len(&p, &l) == 0x0);
-	fail_unless(l == 0);
-	fail_unless(read_u16le_inc_len(&p, &l) == 0x0);
-	fail_unless(l == 0);
-}
-END_TEST
-
 START_TEST(test_endian_read_inc)
 {
 	const uint8_t *p;
@@ -236,7 +206,7 @@ END_TEST
 
 START_TEST(test_endian_write_inc)
 {
-	uint8_t buff[3 * sizeof(uint64_t)];
+	uint8_t buff[2 * sizeof(uint64_t)];
 	uint8_t *p;
 	size_t l;
 
@@ -258,13 +228,6 @@ START_TEST(test_endian_write_inc)
 	l = p - &buff[0];
 	fail_unless(l == 4 * 48 / 8 * sizeof(uint8_t));
 	fail_unless(memcmp(&buff[0], &buff1234large[0], l) == 0);
-
-	p = &buff[0];
-	write_u24le_inc(&p, 0xfe030201);
-	write_u40le_inc(&p, 0xdcba0807060504ul);
-	l = p - &buff[0];
-	fail_unless(l == 24 / 8 + 40 / 8);
-	fail_unless(memcmp(&buff[0], &buff1234large[0], l) == 0);
 }
 END_TEST
 
@@ -279,7 +242,6 @@ Suite *suite_conv(void)
 	tcase_add_test(tc, test_endian_macro);
 	tcase_add_test(tc, test_endian_read);
 	tcase_add_test(tc, test_endian_read_inc);
-	tcase_add_test(tc, test_endian_read_inc_len);
 	tcase_add_test(tc, test_endian_write);
 	tcase_add_test(tc, test_endian_write_inc);
 	suite_add_tcase(s, tc);

@@ -18,9 +18,6 @@
  */
 
 #include <config.h>
-
-/* Request inclusion of the git version suffix in version.h. */
-#define WANT_LIBSIGROK_GIT_VERSION_H
 #include <libsigrok/libsigrok.h>
 
 /**

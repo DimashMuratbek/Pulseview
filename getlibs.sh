@@ -1,13 +1,17 @@
 #! /bin/bash
 
-# Clone libsigrok
-git clone https://github.com/sigrokproject/libsigrok.git
+#! /bin/bash
 
-# Clone libsigrokdecode
-git clone https://github.com/sigrokproject/libsigrokdecode.git
+# Project are included in the repo (TODO: separate)
+# # Clone libsigrok
+# git clone https://github.com/sigrokproject/libsigrok.git
 
-# Clone pulseview
-git clone https://github.com/sigrokproject/pulseview.git
+# # Clone libsigrokdecode
+# git clone https://github.com/sigrokproject/libsigrokdecode.git
+
+# # Clone pulseview
+# git clone https://github.com/sigrokproject/pulseview.git
+
 
 # install libsigrok
 pushd libsigrok

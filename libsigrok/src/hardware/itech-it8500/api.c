@@ -270,7 +270,9 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	sdi->version = g_strdup_printf("%x.%02x", fw_major, fw_minor);
 	sdi->serial_num = unit_serial;
 
-	cg = sr_channel_group_new(sdi, "1", NULL);
+	cg = g_malloc0(sizeof(*cg));
+	cg->name = g_strdup("1");
+	sdi->channel_groups = g_slist_append(sdi->channel_groups, cg);
 	ch = sr_channel_new(sdi, 0, SR_CHANNEL_ANALOG, TRUE, "V1");
 	cg->channels = g_slist_append(cg->channels, ch);
 	ch = sr_channel_new(sdi, 1, SR_CHANNEL_ANALOG, TRUE, "I1");

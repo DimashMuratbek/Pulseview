@@ -66,8 +66,6 @@ enum pps_scpi_cmds {
 	SCPI_CMD_GET_OVER_CURRENT_PROTECTION_ACTIVE,
 	SCPI_CMD_GET_OVER_CURRENT_PROTECTION_THRESHOLD,
 	SCPI_CMD_SET_OVER_CURRENT_PROTECTION_THRESHOLD,
-	SCPI_CMD_GET_OVER_CURRENT_PROTECTION_DELAY,
-	SCPI_CMD_SET_OVER_CURRENT_PROTECTION_DELAY,
 };
 
 /* Defines the SCPI dialect */
@@ -77,7 +75,6 @@ enum pps_scpi_dialect {
 	SCPI_DIALECT_HP_66XXB,
 	SCPI_DIALECT_PHILIPS,
 	SCPI_DIALECT_HMP,
-	SCPI_DIALECT_KEYSIGHT_E36300A,
 };
 
 /*
@@ -124,7 +121,6 @@ struct channel_spec {
 	double frequency[5];
 	double ovp[5];
 	double ocp[5];
-	double ocp_delay[5];
 };
 
 struct channel_group_spec {

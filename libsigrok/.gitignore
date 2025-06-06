@@ -16,10 +16,6 @@
 /*.kdev4
 /Makefile.am.user
 
-# clangd language server cruft
-.cache/
-/compile_commands.json
-
 # Configure/build cruft
 *.[ao]
 *.l[ao]
@@ -30,7 +26,6 @@
 /config.*
 /doxy/
 /include/libsigrok/version.h
-/include/libsigrok/git-version.h
 /libsigrok-*.tar.*
 /libsigrok.pc
 /libtool

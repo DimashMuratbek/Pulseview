@@ -146,7 +146,9 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	sdi->inst_type = SR_INST_SERIAL;
 	sdi->conn = serial;
 
-	cg = sr_channel_group_new(sdi, "1", NULL);
+	cg = g_malloc0(sizeof(struct sr_channel_group));
+	cg->name = g_strdup("1");
+	sdi->channel_groups = g_slist_append(sdi->channel_groups, cg);
 
 	ch = sr_channel_new(sdi, 0, SR_CHANNEL_ANALOG, TRUE, "V");
 	cg->channels = g_slist_append(cg->channels, ch);

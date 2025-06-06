@@ -86,9 +86,9 @@ static int command_start_acquisition(const struct sr_dev_inst *sdi)
 	samplerate = devc->cur_samplerate;
 
 	/* Compute the sample rate. */
-	if (devc->sample_wide && samplerate > MAX_32BIT_SAMPLE_RATE) {   /*MAX_16BIT_SAMPLE_RATE changed to MAX_32BIT_SAMPLE_RATE*/
+	if (devc->sample_wide && samplerate > MAX_16BIT_SAMPLE_RATE) {
 		sr_err("Unable to sample at %" PRIu64 "Hz "
-		       "when collecting 32-bit samples.", samplerate);
+		       "when collecting 16-bit samples.", samplerate);
 		return SR_ERR;
 	}
 
@@ -316,223 +316,56 @@ static void resubmit_transfer(struct libusb_transfer *transfer)
 
 }
 
-static size_t get_buffer_size(struct dev_context *devc)
-{
-	size_t size;
-	
-	/* Calculate buffer size based on number of channels and sample width */
-	if (devc->sample_wide) {
-		/* 32-bit samples */
-		size = TOTAL_BUFFER_SIZE * 4;  /* 4 bytes per sample */
-	} else {
-		/* 8-bit samples */
-		size = TOTAL_BUFFER_SIZE;
-	}
-	
-	return size;
-}
-
-static unsigned int get_number_of_transfers(struct dev_context *devc)
-{
-	/* Use the predefined number of transfers */
-	return USB_NUM_TRANSFERS;
-}
-
-static unsigned int get_timeout(struct dev_context *devc)
-{
-	/* Increase timeout for larger buffer sizes */
-	return 1000;  /* 1 second timeout */
-}
-
-static int receive_data(int fd, int revents, void *cb_data)
-{
-	struct timeval tv;
-	struct drv_context *drvc;
-
-	(void)fd;
-	(void)revents;
-
-	drvc = (struct drv_context *)cb_data;
-
-	tv.tv_sec = tv.tv_usec = 0;
-	libusb_handle_events_timeout(drvc->sr_ctx->libusb_ctx, &tv);
-
-	return TRUE;
-}
-
-static int start_transfers(const struct sr_dev_inst *sdi)
-{
-	struct dev_context *devc;
-	struct sr_usb_dev_inst *usb;
-	struct sr_trigger *trigger;
-	struct libusb_transfer *transfer;
-	unsigned int i, num_transfers;
-	int timeout, ret;
-	unsigned char *buf;
-	size_t size;
-
-	devc = sdi->priv;
-	usb = sdi->conn;
-
-	devc->sent_samples = 0;
-	devc->acq_aborted = FALSE;
-	devc->empty_transfer_count = 0;
-
-	if ((trigger = sr_session_trigger_get(sdi->session))) {
-		int pre_trigger_samples = 0;
-		if (devc->limit_samples > 0)
-			pre_trigger_samples = (devc->capture_ratio * devc->limit_samples) / 100;
-		devc->stl = soft_trigger_logic_new(sdi, trigger, pre_trigger_samples);
-		if (!devc->stl)
-			return SR_ERR_MALLOC;
-		devc->trigger_fired = FALSE;
-	} else {
-		std_session_send_df_frame_begin(sdi);
-		devc->trigger_fired = TRUE;
-	}
-
-	num_transfers = get_number_of_transfers(devc);
-
-	size = get_buffer_size(devc);
-	sr_info("num_transfers: %d, buffer_size: %zu", num_transfers,size);
-	devc->submitted_transfers = 0;
-
-	devc->transfers = g_try_malloc0(sizeof(*devc->transfers) * num_transfers);
-	if (!devc->transfers) {
-		sr_err("USB transfers malloc failed.");
-		return SR_ERR_MALLOC;
-	}
-
-	timeout = get_timeout(devc);
-	devc->num_transfers = num_transfers;
-	for (i = 0; i < num_transfers; i++) {
-		if (!(buf = g_try_malloc(size))) {
-			sr_err("USB transfer buffer malloc failed.");
-			return SR_ERR_MALLOC;
-		}
-		transfer = libusb_alloc_transfer(0);
-		libusb_fill_bulk_transfer(transfer, usb->devhdl,
-				2 | LIBUSB_ENDPOINT_IN, buf, size,
-				receive_transfer, (void *)sdi, timeout);
-		sr_info("submitting transfer: %d", i);
-		if ((ret = libusb_submit_transfer(transfer)) != 0) {
-			sr_err("Failed to submit transfer: %s.",
-			       libusb_error_name(ret));
-			libusb_free_transfer(transfer);
-			g_free(buf);
-			cypress_fx3_abort_acquisition(devc);
-			return SR_ERR;
-		}
-		devc->transfers[i] = transfer;
-		devc->submitted_transfers++;
-	}
-
-	/*
-	 * If this device has analog channels and at least one of them is
-	 * enabled, use mso_send_data_proc() to properly handle the analog
-	 * data. Otherwise use la_send_data_proc().
-	 */
-	if (g_slist_length(devc->enabled_analog_channels) > 0)
-		devc->send_data_proc = mso_send_data_proc;
-	else
-		devc->send_data_proc = la_send_data_proc;
-
-	std_session_send_df_header(sdi);
-
-	return SR_OK;
-}
-
-SR_PRIV int cypress_fx3_start_acquisition(const struct sr_dev_inst *sdi)
-{
-	struct sr_dev_driver *di;
-	struct drv_context *drvc;
-	struct dev_context *devc;
-	int timeout, ret;
-	size_t size;
-
-	di = sdi->driver;
-	drvc = di->context;
-	devc = sdi->priv;
-
-	devc->ctx = drvc->sr_ctx;
-	devc->num_frames = 0;
-	devc->sent_samples = 0;
-	devc->empty_transfer_count = 0;
-	devc->acq_aborted = FALSE;
-
-	if (configure_channels(sdi) != SR_OK) {
-		sr_err("Failed to configure channels.");
-		return SR_ERR;
-	}
-
-	timeout = get_timeout(devc);
-
-	usb_source_add(sdi->session, devc->ctx, timeout, receive_data, drvc);
-
-	size = get_buffer_size(devc);
-
-	
-	/* Prepare for analog sampling. */
-	if (g_slist_length(devc->enabled_analog_channels) > 0) {
-		/* We need a buffer half the size of a transfer. */
-		devc->logic_buffer = g_try_malloc(size / 2);
-		devc->analog_buffer = g_try_malloc(
-			sizeof(float) * size / 2);
-	}
-	start_transfers(sdi);
-	if ((ret = command_start_acquisition(sdi)) != SR_OK) {
-		cypress_fx3_abort_acquisition(devc);
-		return ret;
-	}
-
-	return SR_OK;
-}
-
 static void mso_send_data_proc(struct sr_dev_inst *sdi,
 	uint8_t *data, size_t length, size_t sample_width)
 {
+	size_t i;
 	struct dev_context *devc;
 	struct sr_datafeed_analog analog;
 	struct sr_analog_encoding encoding;
 	struct sr_analog_meaning meaning;
 	struct sr_analog_spec spec;
-	float *fdata;
-	size_t i;
+
+	(void)sample_width;
 
 	devc = sdi->priv;
-	
-	/* Allocate buffer if needed */
-	if (!devc->analog_buffer) {
-		devc->analog_buffer = g_malloc0(get_buffer_size(devc));
-	}
 
-	/* Process data based on sample width */
-	if (sample_width == 4) {
-		/* 32-bit samples */
-		fdata = (float *)data;
-		for (i = 0; i < length / 4; i++) {
-			devc->analog_buffer[i] = fdata[i];
-		}
-	} else {
-		/* 8-bit samples */
-		for (i = 0; i < length; i++) {
-			devc->analog_buffer[i] = (float)data[i];
-		}
-	}
+	length /= 2;
 
-	/* Send the data */
-	sr_analog_init(&analog, &encoding, &meaning, &spec, 0);
-	analog.meaning->channels = sdi->channels;
+	/* Send the logic */
+	for (i = 0; i < length; i++) {
+		devc->logic_buffer[i] = data[i * 2];
+		/* Rescale to -10V - +10V from 0-255. */
+		devc->analog_buffer[i] = (data[i * 2 + 1] - 128.0f) / 12.8f;
+	};
+
+	const struct sr_datafeed_logic logic = {
+		.length = length,
+		.unitsize = 1,
+		.data = devc->logic_buffer
+	};
+
+	const struct sr_datafeed_packet logic_packet = {
+		.type = SR_DF_LOGIC,
+		.payload = &logic
+	};
+
+	sr_session_send(sdi, &logic_packet);
+
+	sr_analog_init(&analog, &encoding, &meaning, &spec, 2);
+	analog.meaning->channels = devc->enabled_analog_channels;
+	analog.meaning->mq = SR_MQ_VOLTAGE;
+	analog.meaning->unit = SR_UNIT_VOLT;
+	analog.meaning->mqflags = 0 /* SR_MQFLAG_DC */;
+	analog.num_samples = length;
 	analog.data = devc->analog_buffer;
-	analog.num_samples = length / sample_width;
-	analog.mqflags = SR_MQFLAG_DC;
-	analog.unit = SR_UNIT_VOLT;
-	analog.mq = SR_MQ_VOLTAGE;
-	analog.encoding->digits = 8;
-	analog.encoding->spec_digits = 3;
-	analog.encoding->unitsize = sizeof(float);
-	analog.encoding->is_float = 1;
-	sr_session_send(sdi, &analog);
+
+	const struct sr_datafeed_packet analog_packet = {
+		.type = SR_DF_ANALOG,
+		.payload = &analog
+	};
+
+	sr_session_send(sdi, &analog_packet);
 }
 
 static void la_send_data_proc(struct sr_dev_inst *sdi,
@@ -713,4 +546,185 @@ static int configure_channels(const struct sr_dev_inst *sdi)
 static unsigned int to_bytes_per_ms(unsigned int samplerate)
 {
 	return samplerate / 1000;
+}
+
+static size_t get_buffer_size(struct dev_context *devc)
+{
+	size_t s;
+
+	/*
+	 * The buffer should be large enough to hold 10ms of data and
+	 * a multiple of 512.
+	 */
+	s = 10 * to_bytes_per_ms(devc->cur_samplerate);
+	return (s + 1023) & ~1023;
+}
+
+static unsigned int get_number_of_transfers(struct dev_context *devc)
+{
+	unsigned int n;
+
+	/* Total buffer size should be able to hold about 500ms of data. */
+	n = (500 * to_bytes_per_ms(devc->cur_samplerate) /
+		get_buffer_size(devc));
+
+	if (n > NUM_SIMUL_TRANSFERS)
+		return NUM_SIMUL_TRANSFERS;
+
+	return n;
+}
+
+static unsigned int get_timeout(struct dev_context *devc)
+{
+	size_t total_size;
+	unsigned int timeout;
+
+	total_size = get_buffer_size(devc) *
+			get_number_of_transfers(devc);
+	timeout = total_size / to_bytes_per_ms(devc->cur_samplerate);
+	return timeout + timeout / 4; /* Leave a headroom of 25% percent. */
+}
+
+static int receive_data(int fd, int revents, void *cb_data)
+{
+	struct timeval tv;
+	struct drv_context *drvc;
+
+	(void)fd;
+	(void)revents;
+
+	drvc = (struct drv_context *)cb_data;
+
+	tv.tv_sec = tv.tv_usec = 0;
+	libusb_handle_events_timeout(drvc->sr_ctx->libusb_ctx, &tv);
+
+	return TRUE;
+}
+
+static int start_transfers(const struct sr_dev_inst *sdi)
+{
+	struct dev_context *devc;
+	struct sr_usb_dev_inst *usb;
+	struct sr_trigger *trigger;
+	struct libusb_transfer *transfer;
+	unsigned int i, num_transfers;
+	int timeout, ret;
+	unsigned char *buf;
+	size_t size;
+
+	devc = sdi->priv;
+	usb = sdi->conn;
+
+	devc->sent_samples = 0;
+	devc->acq_aborted = FALSE;
+	devc->empty_transfer_count = 0;
+
+	if ((trigger = sr_session_trigger_get(sdi->session))) {
+		int pre_trigger_samples = 0;
+		if (devc->limit_samples > 0)
+			pre_trigger_samples = (devc->capture_ratio * devc->limit_samples) / 100;
+		devc->stl = soft_trigger_logic_new(sdi, trigger, pre_trigger_samples);
+		if (!devc->stl)
+			return SR_ERR_MALLOC;
+		devc->trigger_fired = FALSE;
+	} else {
+		std_session_send_df_frame_begin(sdi);
+		devc->trigger_fired = TRUE;
+	}
+
+	num_transfers = get_number_of_transfers(devc);
+
+	size = get_buffer_size(devc);
+	sr_info("num_transfers: %d, buffer_size: %d", num_transfers,size);
+	devc->submitted_transfers = 0;
+
+	devc->transfers = g_try_malloc0(sizeof(*devc->transfers) * num_transfers);
+	if (!devc->transfers) {
+		sr_err("USB transfers malloc failed.");
+		return SR_ERR_MALLOC;
+	}
+
+	timeout = get_timeout(devc);
+	devc->num_transfers = num_transfers;
+	for (i = 0; i < num_transfers; i++) {
+		if (!(buf = g_try_malloc(size))) {
+			sr_err("USB transfer buffer malloc failed.");
+			return SR_ERR_MALLOC;
+		}
+		transfer = libusb_alloc_transfer(0);
+		libusb_fill_bulk_transfer(transfer, usb->devhdl,
+				2 | LIBUSB_ENDPOINT_IN, buf, size,
+				receive_transfer, (void *)sdi, timeout);
+		sr_info("submitting transfer: %d", i);
+		if ((ret = libusb_submit_transfer(transfer)) != 0) {
+			sr_err("Failed to submit transfer: %s.",
+			       libusb_error_name(ret));
+			libusb_free_transfer(transfer);
+			g_free(buf);
+			cypress_fx3_abort_acquisition(devc);
+			return SR_ERR;
+		}
+		devc->transfers[i] = transfer;
+		devc->submitted_transfers++;
+	}
+
+	/*
+	 * If this device has analog channels and at least one of them is
+	 * enabled, use mso_send_data_proc() to properly handle the analog
+	 * data. Otherwise use la_send_data_proc().
+	 */
+	if (g_slist_length(devc->enabled_analog_channels) > 0)
+		devc->send_data_proc = mso_send_data_proc;
+	else
+		devc->send_data_proc = la_send_data_proc;
+
+	std_session_send_df_header(sdi);
+
+	return SR_OK;
+}
+
+SR_PRIV int cypress_fx3_start_acquisition(const struct sr_dev_inst *sdi)
+{
+	struct sr_dev_driver *di;
+	struct drv_context *drvc;
+	struct dev_context *devc;
+	int timeout, ret;
+	size_t size;
+
+	di = sdi->driver;
+	drvc = di->context;
+	devc = sdi->priv;
+
+	devc->ctx = drvc->sr_ctx;
+	devc->num_frames = 0;
+	devc->sent_samples = 0;
+	devc->empty_transfer_count = 0;
+	devc->acq_aborted = FALSE;
+
+	if (configure_channels(sdi) != SR_OK) {
+		sr_err("Failed to configure channels.");
+		return SR_ERR;
+	}
+
+	timeout = get_timeout(devc);
+
+	usb_source_add(sdi->session, devc->ctx, timeout, receive_data, drvc);
+
+	size = get_buffer_size(devc);
+
+	
+	/* Prepare for analog sampling. */
+	if (g_slist_length(devc->enabled_analog_channels) > 0) {
+		/* We need a buffer half the size of a transfer. */
+		devc->logic_buffer = g_try_malloc(size / 2);
+		devc->analog_buffer = g_try_malloc(
+			sizeof(float) * size / 2);
+	}
+	start_transfers(sdi);
+	if ((ret = command_start_acquisition(sdi)) != SR_OK) {
+		cypress_fx3_abort_acquisition(devc);
+		return ret;
+	}
+
+	return SR_OK;
 }

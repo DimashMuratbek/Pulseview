@@ -161,11 +161,6 @@ static const char *coupling_options_rtm300x[] = {
 	"GND",
 };
 
-static const char *coupling_options_rth100x[] = {
-	"ACL", // AC with 1 MOhm termination
-	"DCL", // DC with 1 MOhm termination
-};
-
 static const char *scope_trigger_slopes[] = {
 	"POS",
 	"NEG",
@@ -212,18 +207,6 @@ static const char *an2_dig16_sbus_trigger_sources[] = {
 	"LINE", "EXT", "PATT", "SBUS1", "SBUS2",
 	"D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7",
 	"D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15",
-};
-
-/* RTH1002 */
-static const char *an2_dig8_isol_trigger_sources[] = {
-	"CH1", "CH2",
-	"D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7",
-};
-
-/* RTH1004 */
-static const char *an4_dig8_isol_trigger_sources[] = {
-	"CH1", "CH2", "CH3", "CH4",
-	"D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7",
 };
 
 /* HMO Compact4 */
@@ -347,17 +330,7 @@ static const uint64_t vdivs[][2] = {
 	{ 2, 1 },
 	{ 5, 1 },
 	{ 10, 1 },
-	{ 20, 1 },
-	{ 50, 1 },
 };
-/*
- * It feels a little hacky to use a single table yet use different item
- * count values here. But it simplifies maintenance, reduces redundancy
- * by avoiding several vdivs[] table versions of mostly identical content,
- * still references which declare models' capabilities remain readable.
- */
-#define VDIVS_COUNT_UPTO_10V	(ARRAY_SIZE(vdivs) - 2)
-#define VDIVS_COUNT_UPTO_50V	(ARRAY_SIZE(vdivs))
 
 static const char *scope_analog_channel_names[] = {
 	"CH1", "CH2", "CH3", "CH4",
@@ -404,7 +377,7 @@ static struct scope_config scope_models[] = {
 		.num_timebases = ARRAY_SIZE(timebases_hmo_compact),
 
 		.vdivs = &vdivs,
-		.num_vdivs = VDIVS_COUNT_UPTO_10V,
+		.num_vdivs = ARRAY_SIZE(vdivs),
 
 		.num_ydivs = 8,
 
@@ -445,7 +418,7 @@ static struct scope_config scope_models[] = {
 		.num_timebases = ARRAY_SIZE(timebases),
 
 		.vdivs = &vdivs,
-		.num_vdivs = VDIVS_COUNT_UPTO_10V,
+		.num_vdivs = ARRAY_SIZE(vdivs),
 
 		.num_ydivs = 8,
 
@@ -486,7 +459,7 @@ static struct scope_config scope_models[] = {
 		.num_timebases = ARRAY_SIZE(timebases),
 
 		.vdivs = &vdivs,
-		.num_vdivs = VDIVS_COUNT_UPTO_10V,
+		.num_vdivs = ARRAY_SIZE(vdivs),
 
 		.num_ydivs = 8,
 
@@ -527,7 +500,7 @@ static struct scope_config scope_models[] = {
 		.num_timebases = ARRAY_SIZE(timebases_hmo_compact),
 
 		.vdivs = &vdivs,
-		.num_vdivs = VDIVS_COUNT_UPTO_10V,
+		.num_vdivs = ARRAY_SIZE(vdivs),
 
 		.num_ydivs = 8,
 
@@ -567,7 +540,7 @@ static struct scope_config scope_models[] = {
 		.num_timebases = ARRAY_SIZE(timebases),
 
 		.vdivs = &vdivs,
-		.num_vdivs = VDIVS_COUNT_UPTO_10V,
+		.num_vdivs = ARRAY_SIZE(vdivs),
 
 		.num_ydivs = 8,
 
@@ -607,7 +580,7 @@ static struct scope_config scope_models[] = {
 		.num_timebases = ARRAY_SIZE(timebases),
 
 		.vdivs = &vdivs,
-		.num_vdivs = VDIVS_COUNT_UPTO_50V,
+		.num_vdivs = ARRAY_SIZE(vdivs),
 
 		.num_ydivs = 8,
 
@@ -647,7 +620,7 @@ static struct scope_config scope_models[] = {
 		.num_timebases = ARRAY_SIZE(timebases),
 
 		.vdivs = &vdivs,
-		.num_vdivs = VDIVS_COUNT_UPTO_50V,
+		.num_vdivs = ARRAY_SIZE(vdivs),
 
 		.num_ydivs = 8,
 
@@ -687,7 +660,7 @@ static struct scope_config scope_models[] = {
 		.num_timebases = ARRAY_SIZE(timebases),
 
 		.vdivs = &vdivs,
-		.num_vdivs = VDIVS_COUNT_UPTO_10V,
+		.num_vdivs = ARRAY_SIZE(vdivs),
 
 		.num_ydivs = 8,
 
@@ -727,7 +700,7 @@ static struct scope_config scope_models[] = {
 		.num_timebases = ARRAY_SIZE(timebases),
 
 		.vdivs = &vdivs,
-		.num_vdivs = VDIVS_COUNT_UPTO_10V,
+		.num_vdivs = ARRAY_SIZE(vdivs),
 
 		.num_ydivs = 8,
 
@@ -759,86 +732,6 @@ static struct scope_config scope_models[] = {
 
 		.trigger_sources = &an4_dig16_sbus_trigger_sources,
 		.num_trigger_sources = ARRAY_SIZE(an4_dig16_sbus_trigger_sources),
-
-		.trigger_slopes = &scope_trigger_slopes,
-		.num_trigger_slopes = ARRAY_SIZE(scope_trigger_slopes),
-
-		.timebases = &timebases,
-		.num_timebases = ARRAY_SIZE(timebases),
-
-		.vdivs = &vdivs,
-		.num_vdivs = VDIVS_COUNT_UPTO_10V,
-
-		.num_ydivs = 8,
-
-		.scpi_dialect = &rohde_schwarz_log_not_pod_scpi_dialect,
-	},
-	{
-		.name = {"RTH1002", NULL},
-		.analog_channels = 2,
-		.digital_channels = 8,
-
-		.analog_names = &scope_analog_channel_names,
-		.digital_names = &scope_digital_channel_names,
-
-		.devopts = &devopts,
-		.num_devopts = ARRAY_SIZE(devopts),
-
-		.devopts_cg_analog = &devopts_cg_analog,
-		.num_devopts_cg_analog = ARRAY_SIZE(devopts_cg_analog),
-
-		.devopts_cg_digital = &devopts_cg_digital,
-		.num_devopts_cg_digital = ARRAY_SIZE(devopts_cg_digital),
-
-		.coupling_options = &coupling_options_rth100x,
-		.num_coupling_options = ARRAY_SIZE(coupling_options_rth100x),
-
-		.logic_threshold = &logic_threshold,
-		.num_logic_threshold = ARRAY_SIZE(logic_threshold),
-		.logic_threshold_for_pod = TRUE,
-
-		.trigger_sources = &an2_dig8_isol_trigger_sources,
-		.num_trigger_sources = ARRAY_SIZE(an2_dig8_isol_trigger_sources),
-
-		.trigger_slopes = &scope_trigger_slopes,
-		.num_trigger_slopes = ARRAY_SIZE(scope_trigger_slopes),
-
-		.timebases = &timebases,
-		.num_timebases = ARRAY_SIZE(timebases),
-
-		.vdivs = &vdivs,
-		.num_vdivs = ARRAY_SIZE(vdivs),
-
-		.num_ydivs = 8,
-
-		.scpi_dialect = &rohde_schwarz_log_not_pod_scpi_dialect,
-	},
-	{
-		.name = {"RTH1004", NULL},
-		.analog_channels = 4,
-		.digital_channels = 8,
-
-		.analog_names = &scope_analog_channel_names,
-		.digital_names = &scope_digital_channel_names,
-
-		.devopts = &devopts,
-		.num_devopts = ARRAY_SIZE(devopts),
-
-		.devopts_cg_analog = &devopts_cg_analog,
-		.num_devopts_cg_analog = ARRAY_SIZE(devopts_cg_analog),
-
-		.devopts_cg_digital = &devopts_cg_digital,
-		.num_devopts_cg_digital = ARRAY_SIZE(devopts_cg_digital),
-
-		.coupling_options = &coupling_options_rth100x,
-		.num_coupling_options = ARRAY_SIZE(coupling_options_rth100x),
-
-		.logic_threshold = &logic_threshold,
-		.num_logic_threshold = ARRAY_SIZE(logic_threshold),
-		.logic_threshold_for_pod = TRUE,
-
-		.trigger_sources = &an4_dig8_isol_trigger_sources,
-		.num_trigger_sources = ARRAY_SIZE(an4_dig8_isol_trigger_sources),
 
 		.trigger_slopes = &scope_trigger_slopes,
 		.num_trigger_slopes = ARRAY_SIZE(scope_trigger_slopes),
@@ -1003,7 +896,7 @@ static int analog_channel_state_get(struct sr_dev_inst *sdi,
 		if (sr_scpi_get_string(scpi, command, &tmp_str) != SR_OK)
 			return SR_ERR;
 
-		if (array_float_get(tmp_str, *(config->vdivs), config->num_vdivs, &j) != SR_OK) {
+		if (array_float_get(tmp_str, ARRAY_AND_SIZE(vdivs), &j) != SR_OK) {
 			g_free(tmp_str);
 			sr_err("Could not determine array index for vertical div scale.");
 			return SR_ERR;
@@ -1299,7 +1192,6 @@ SR_PRIV int hmo_init_device(struct sr_dev_inst *sdi)
 	unsigned int i, j, group;
 	struct sr_channel *ch;
 	struct dev_context *devc;
-	const char *cg_name;
 	int ret;
 
 	devc = sdi->priv;
@@ -1340,20 +1232,27 @@ SR_PRIV int hmo_init_device(struct sr_dev_inst *sdi)
 		ch = sr_channel_new(sdi, i, SR_CHANNEL_ANALOG, TRUE,
 			   (*scope_models[model_index].analog_names)[i]);
 
-		cg_name = (*scope_models[model_index].analog_names)[i];
-		devc->analog_groups[i] = sr_channel_group_new(sdi, cg_name, NULL);
+		devc->analog_groups[i] = g_malloc0(sizeof(struct sr_channel_group));
+
+		devc->analog_groups[i]->name = g_strdup(
+			(char *)(*scope_models[model_index].analog_names)[i]);
 		devc->analog_groups[i]->channels = g_slist_append(NULL, ch);
+
+		sdi->channel_groups = g_slist_append(sdi->channel_groups,
+						   devc->analog_groups[i]);
 	}
 
 	/* Add digital channel groups. */
 	ret = SR_OK;
 	for (i = 0; i < scope_models[model_index].digital_pods; i++) {
-		devc->digital_groups[i] = sr_channel_group_new(sdi, NULL, NULL);
+		devc->digital_groups[i] = g_malloc0(sizeof(struct sr_channel_group));
 		if (!devc->digital_groups[i]) {
 			ret = SR_ERR_MALLOC;
 			break;
 		}
 		devc->digital_groups[i]->name = g_strdup_printf("POD%d", i + 1);
+		sdi->channel_groups = g_slist_append(sdi->channel_groups,
+				   devc->digital_groups[i]);
 	}
 	if (ret != SR_OK)
 		return ret;

@@ -605,8 +605,7 @@ SR_PRIV GVariant *std_gvar_tuple_array(const uint64_t a[][2], unsigned int n)
 		rational[1] = g_variant_new_uint64(a[i][1]);
 
 		/* FIXME: Valgrind reports a memory leak here. */
-		g_variant_builder_add_value(&gvb, g_variant_new_tuple(rational,
-			ARRAY_SIZE(rational)));
+		g_variant_builder_add_value(&gvb, g_variant_new_tuple(rational, 2));
 	}
 
 	return g_variant_builder_end(&gvb);
@@ -625,8 +624,7 @@ SR_PRIV GVariant *std_gvar_tuple_rational(const struct sr_rational *r, unsigned 
 		rational[1] = g_variant_new_uint64(r[i].q);
 
 		/* FIXME: Valgrind reports a memory leak here. */
-		g_variant_builder_add_value(&gvb, g_variant_new_tuple(rational,
-			ARRAY_SIZE(rational)));
+		g_variant_builder_add_value(&gvb, g_variant_new_tuple(rational, 2));
 	}
 
 	return g_variant_builder_end(&gvb);
@@ -689,17 +687,17 @@ SR_PRIV GVariant *std_gvar_min_max_step_thresholds(const double min, const doubl
 
 	g_variant_builder_init(&gvb, G_VARIANT_TYPE_ARRAY);
 
-	for (d = min; d <= max + step / 2.0; d += step) {
+	for (d = min; d <= max; d += step) {
 		/*
 		 * We will never see exactly 0.0 because of the error we're
 		 * accumulating, so catch the "zero" value and force it to be 0.
 		 */
-		v = ((d > (-step / 2.0)) && (d < (step / 2.0))) ? 0 : d;
+		v = ((d > (-step / 2)) && (d < (step / 2))) ? 0 : d;
 
 		range[0] = g_variant_new_double(v);
 		range[1] = g_variant_new_double(v);
 
-		gvar = g_variant_new_tuple(range, ARRAY_SIZE(range));
+		gvar = g_variant_new_tuple(range, 2);
 		g_variant_builder_add_value(&gvb, gvar);
 	}
 
@@ -713,7 +711,7 @@ SR_PRIV GVariant *std_gvar_tuple_u64(uint64_t low, uint64_t high)
 	range[0] = g_variant_new_uint64(low);
 	range[1] = g_variant_new_uint64(high);
 
-	return g_variant_new_tuple(range, ARRAY_SIZE(range));
+	return g_variant_new_tuple(range, 2);
 }
 
 SR_PRIV GVariant *std_gvar_tuple_double(double low, double high)
@@ -723,7 +721,7 @@ SR_PRIV GVariant *std_gvar_tuple_double(double low, double high)
 	range[0] = g_variant_new_double(low);
 	range[1] = g_variant_new_double(high);
 
-	return g_variant_new_tuple(range, ARRAY_SIZE(range));
+	return g_variant_new_tuple(range, 2);
 }
 
 SR_PRIV GVariant *std_gvar_array_i32(const int32_t a[], unsigned int n)
@@ -772,7 +770,7 @@ SR_PRIV GVariant *std_gvar_thresholds(const double a[][2], unsigned int n)
 	for (i = 0; i < n; i++) {
 		range[0] = g_variant_new_double(a[i][0]);
 		range[1] = g_variant_new_double(a[i][1]);
-		gvar = g_variant_new_tuple(range, ARRAY_SIZE(range));
+		gvar = g_variant_new_tuple(range, 2);
 		g_variant_builder_add_value(&gvb, gvar);
 	}
 

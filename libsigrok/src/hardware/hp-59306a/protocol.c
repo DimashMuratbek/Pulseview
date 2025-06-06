@@ -24,27 +24,17 @@
 SR_PRIV int hp_59306a_switch_cg(const struct sr_dev_inst *sdi,
 	const struct sr_channel_group *cg, gboolean enabled)
 {
-	char *cmd;
-	struct channel_group_context *cgc;
-	struct sr_scpi_dev_inst *scpi;
 	int ret;
-
-	if (!cg) {
-		if (enabled)
-			cmd = g_strdup("A123456");
-		else
-			cmd = g_strdup("B123456");
-	} else {
-		cgc = cg->priv;
-		if (enabled)
-			cmd = g_strdup_printf("A%zu", cgc->number);
-		else
-			cmd = g_strdup_printf("B%zu", cgc->number);
-	}
+	struct sr_scpi_dev_inst *scpi;
+	struct channel_group_context *cgc;
 
 	scpi = sdi->conn;
-	ret = sr_scpi_send(scpi, cmd);
-	g_free(cmd);
+	cgc = cg->priv;
+
+	if (enabled)
+		ret = sr_scpi_send(scpi, "A%zu", cgc->number);
+	else
+		ret = sr_scpi_send(scpi, "B%zu", cgc->number);
 
 	return ret;
 }

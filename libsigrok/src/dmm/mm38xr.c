@@ -341,6 +341,7 @@ SR_PRIV int meterman_38xr_parse(const uint8_t *buf, float *floatval,
 	struct sr_datafeed_analog *analog, void *info)
 {
 	gboolean is_overload, is_bad_jack;
+	int exponent;
 	int digits;
 	struct meterman_info mi;
 
@@ -348,8 +349,6 @@ SR_PRIV int meterman_38xr_parse(const uint8_t *buf, float *floatval,
 
 	if (meterman_38xr_decode(buf, &mi) != SR_OK)
 		return SR_ERR;
-
-	digits = 0;
 
 	if (mi.meas_mode != MEAS_MODE_CONTINUITY) {
 		is_overload = mi.reading == METERMAN_DIGITS_OVERLOAD;
@@ -441,17 +440,18 @@ SR_PRIV int meterman_38xr_parse(const uint8_t *buf, float *floatval,
 	if (mi.rflag_h == 0x0a || mi.peakstatus == 0x0b)
 		analog->meaning->mqflags |= SR_MQFLAG_AUTORANGE;
 	if (mi.meas_mode != MEAS_MODE_CONTINUITY) {
-		digits = units_exponents[mi.meas_mode][mi.rangecode] -
-			decimal_digits[mi.meas_mode][mi.rangecode];
+		digits = decimal_digits[mi.meas_mode][mi.rangecode];
+		exponent = units_exponents[mi.meas_mode][mi.rangecode];
 
 		*floatval = mi.reading;
 		if (meterman_38xr_is_negative(&mi)) {
 			*floatval *= -1.0f;
 		}
-		*floatval *= powf(10, digits);
+		*floatval *= powf(10, -digits);
+		*floatval *= powf(10, exponent);
 	}
-	analog->encoding->digits = -digits;
-	analog->spec->spec_digits = -digits;
+	analog->encoding->digits = 4;
+	analog->spec->spec_digits = 4;
 
 	return SR_OK;
 }

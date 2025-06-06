@@ -27,7 +27,7 @@ struct ols_basic_trigger_desc {
 };
 
 SR_PRIV int send_shortcommand(struct sr_serial_dev_inst *serial,
-			      uint8_t command)
+		uint8_t command)
 {
 	char buf[1];
 
@@ -42,13 +42,13 @@ SR_PRIV int send_shortcommand(struct sr_serial_dev_inst *serial,
 	return SR_OK;
 }
 
-SR_PRIV int send_longcommand(struct sr_serial_dev_inst *serial, uint8_t command,
-			     uint8_t *data)
+SR_PRIV int send_longcommand(struct sr_serial_dev_inst *serial,
+		uint8_t command, uint8_t *data)
 {
 	char buf[5];
 
-	sr_dbg("Sending cmd 0x%.2x data 0x%.2x%.2x%.2x%.2x.", command, data[0],
-	       data[1], data[2], data[3]);
+	sr_dbg("Sending cmd 0x%.2x data 0x%.2x%.2x%.2x%.2x.", command,
+			data[0], data[1], data[2], data[3]);
 	buf[0] = command;
 	buf[1] = data[0];
 	buf[2] = data[1];
@@ -63,8 +63,8 @@ SR_PRIV int send_longcommand(struct sr_serial_dev_inst *serial, uint8_t command,
 	return SR_OK;
 }
 
-static int ols_send_longdata(struct sr_serial_dev_inst *serial, uint8_t command,
-			     uint32_t value)
+static int ols_send_longdata(struct sr_serial_dev_inst *serial,
+		uint8_t command, uint32_t value)
 {
 	uint8_t data[4];
 	WL32(data, value);
@@ -96,8 +96,7 @@ SR_PRIV uint32_t ols_channel_mask(const struct sr_dev_inst *sdi)
 	return channel_mask;
 }
 
-static int convert_trigger(const struct sr_dev_inst *sdi,
-			   struct ols_basic_trigger_desc *ols_trigger)
+static int convert_trigger(const struct sr_dev_inst *sdi, struct ols_basic_trigger_desc *ols_trigger)
 {
 	struct sr_trigger *trigger;
 	struct sr_trigger_stage *stage;
@@ -117,7 +116,7 @@ static int convert_trigger(const struct sr_dev_inst *sdi,
 	ols_trigger->num_stages = g_slist_length(trigger->stages);
 	if (ols_trigger->num_stages > NUM_BASIC_TRIGGER_STAGES) {
 		sr_err("This device only supports %d trigger stages.",
-		       NUM_BASIC_TRIGGER_STAGES);
+				NUM_BASIC_TRIGGER_STAGES);
 		return SR_ERR;
 	}
 
@@ -128,15 +127,35 @@ static int convert_trigger(const struct sr_dev_inst *sdi,
 			if (!match->channel->enabled)
 				/* Ignore disabled channels with a trigger. */
 				continue;
-			ols_trigger->trigger_mask[stage->stage] |=
-				1 << match->channel->index;
+			ols_trigger->trigger_mask[stage->stage] |= 1 << match->channel->index;
 			if (match->match == SR_TRIGGER_ONE)
-				ols_trigger->trigger_value[stage->stage] |=
-					1 << match->channel->index;
+				ols_trigger->trigger_value[stage->stage] |= 1 << match->channel->index;
 		}
 	}
 
 	return SR_OK;
+}
+
+SR_PRIV struct dev_context *ols_dev_new(void)
+{
+	struct dev_context *devc;
+
+	devc = g_malloc0(sizeof(struct dev_context));
+	devc->trigger_at_smpl = OLS_NO_TRIGGER;
+
+	return devc;
+}
+
+static void ols_channel_new(struct sr_dev_inst *sdi, int num_chan)
+{
+	struct dev_context *devc = sdi->priv;
+	int i;
+
+	for (i = 0; i < num_chan; i++)
+		sr_channel_new(sdi, i, SR_CHANNEL_LOGIC, TRUE,
+				ols_channel_names[i]);
+
+	devc->max_channels = num_chan;
 }
 
 static void ols_metadata_quirks(struct sr_dev_inst *sdi)
@@ -153,7 +172,7 @@ static void ols_metadata_quirks(struct sr_dev_inst *sdi)
 	is_shrimp = sdi->model && strcmp(sdi->model, "Shrimp1.0") == 0;
 	if (is_shrimp) {
 		if (!devc->max_channels)
-			devc->max_channels = 4;
+			ols_channel_new(sdi, 4);
 		if (!devc->max_samples)
 			devc->max_samples = 256 * 1024;
 		if (!devc->max_samplerate)
@@ -164,9 +183,9 @@ static void ols_metadata_quirks(struct sr_dev_inst *sdi)
 		devc->device_flags |= DEVICE_FLAG_IS_DEMON_CORE;
 }
 
-SR_PRIV int ols_get_metadata(struct sr_dev_inst *sdi)
+SR_PRIV struct sr_dev_inst *get_metadata(struct sr_serial_dev_inst *serial)
 {
-	struct sr_serial_dev_inst *serial;
+	struct sr_dev_inst *sdi;
 	struct dev_context *devc;
 	uint32_t tmp_int;
 	uint8_t key, type;
@@ -174,8 +193,10 @@ SR_PRIV int ols_get_metadata(struct sr_dev_inst *sdi)
 	GString *tmp_str, *devname, *version;
 	guchar tmp_c;
 
-	serial = sdi->conn;
-	devc = sdi->priv;
+	sdi = g_malloc0(sizeof(struct sr_dev_inst));
+	sdi->status = SR_ST_INACTIVE;
+	devc = ols_dev_new();
+	sdi->priv = devc;
 
 	devname = g_string_new("");
 	version = g_string_new("");
@@ -195,17 +216,13 @@ SR_PRIV int ols_get_metadata(struct sr_dev_inst *sdi)
 			/* NULL-terminated string */
 			tmp_str = g_string_new("");
 			delay_ms = serial_timeout(serial, 1);
-			while (serial_read_blocking(serial, &tmp_c, 1,
-						    delay_ms) == 1 &&
-			       tmp_c != '\0')
+			while (serial_read_blocking(serial, &tmp_c, 1, delay_ms) == 1 && tmp_c != '\0')
 				g_string_append_c(tmp_str, tmp_c);
-			sr_dbg("Got metadata token 0x%.2x value '%s'.", key,
-			       tmp_str->str);
+			sr_dbg("Got metadata token 0x%.2x value '%s'.", key, tmp_str->str);
 			switch (key) {
 			case METADATA_TOKEN_DEVICE_NAME:
 				/* Device name */
-				devname =
-					g_string_append(devname, tmp_str->str);
+				devname = g_string_append(devname, tmp_str->str);
 				break;
 			case METADATA_TOKEN_FPGA_VERSION:
 				/* FPGA firmware version */
@@ -222,8 +239,7 @@ SR_PRIV int ols_get_metadata(struct sr_dev_inst *sdi)
 				g_string_append(version, tmp_str->str);
 				break;
 			default:
-				sr_info("ols: unknown token 0x%.2x: '%s'", key,
-					tmp_str->str);
+				sr_info("ols: unknown token 0x%.2x: '%s'", key, tmp_str->str);
 				break;
 			}
 			g_string_free(tmp_str, TRUE);
@@ -231,16 +247,14 @@ SR_PRIV int ols_get_metadata(struct sr_dev_inst *sdi)
 		case 1:
 			/* 32-bit unsigned integer */
 			delay_ms = serial_timeout(serial, 4);
-			if (serial_read_blocking(serial, &tmp_int, 4,
-						 delay_ms) != 4)
+			if (serial_read_blocking(serial, &tmp_int, 4, delay_ms) != 4)
 				break;
 			tmp_int = RB32(&tmp_int);
-			sr_dbg("Got metadata token 0x%.2x value 0x%.8x.", key,
-			       tmp_int);
+			sr_dbg("Got metadata token 0x%.2x value 0x%.8x.", key, tmp_int);
 			switch (key) {
 			case METADATA_TOKEN_NUM_PROBES_LONG:
 				/* Number of usable channels */
-				devc->max_channels = tmp_int;
+				ols_channel_new(sdi, tmp_int);
 				break;
 			case METADATA_TOKEN_SAMPLE_MEMORY_BYTES:
 				/* Amount of sample memory available (bytes) */
@@ -259,8 +273,7 @@ SR_PRIV int ols_get_metadata(struct sr_dev_inst *sdi)
 				devc->protocol_version = tmp_int;
 				break;
 			default:
-				sr_info("Unknown token 0x%.2x: 0x%.8x.", key,
-					tmp_int);
+				sr_info("Unknown token 0x%.2x: 0x%.8x.", key, tmp_int);
 				break;
 			}
 			break;
@@ -269,20 +282,18 @@ SR_PRIV int ols_get_metadata(struct sr_dev_inst *sdi)
 			delay_ms = serial_timeout(serial, 1);
 			if (serial_read_blocking(serial, &tmp_c, 1, delay_ms) != 1)
 				break;
-			sr_dbg("Got metadata token 0x%.2x value 0x%.2x.", key,
-			       tmp_c);
+			sr_dbg("Got metadata token 0x%.2x value 0x%.2x.", key, tmp_c);
 			switch (key) {
 			case METADATA_TOKEN_NUM_PROBES_SHORT:
 				/* Number of usable channels */
-				devc->max_channels = tmp_c;
+				ols_channel_new(sdi, tmp_c);
 				break;
 			case METADATA_TOKEN_PROTOCOL_VERSION_SHORT:
 				/* protocol version */
 				devc->protocol_version = tmp_c;
 				break;
 			default:
-				sr_info("Unknown token 0x%.2x: 0x%.2x.", key,
-					tmp_c);
+				sr_info("Unknown token 0x%.2x: 0x%.2x.", key, tmp_c);
 				break;
 			}
 			break;
@@ -292,22 +303,19 @@ SR_PRIV int ols_get_metadata(struct sr_dev_inst *sdi)
 		}
 	}
 
-	sdi->model = g_string_free(devname, FALSE);
-	sdi->version = g_string_free(version, FALSE);
+	sdi->model = devname->str;
+	sdi->version = version->str;
+	g_string_free(devname, FALSE);
+	g_string_free(version, FALSE);
 
 	/* Optionally amend received metadata, model specific quirks. */
 	ols_metadata_quirks(sdi);
 
-	/* Certain consumer modules, like srzip, don't like when we feed bigger
-	 * unitsize than they expect from maximum number of channels.
-	 */
-	devc->unitsize = (devc->max_channels + 7) / 8;
-
-	return SR_OK;
+	return sdi;
 }
 
 SR_PRIV int ols_set_samplerate(const struct sr_dev_inst *sdi,
-			       const uint64_t samplerate)
+		const uint64_t samplerate)
 {
 	struct dev_context *devc;
 
@@ -319,8 +327,7 @@ SR_PRIV int ols_set_samplerate(const struct sr_dev_inst *sdi,
 		sr_info("Enabling demux mode.");
 		devc->capture_flags |= CAPTURE_FLAG_DEMUX;
 		devc->capture_flags &= ~CAPTURE_FLAG_NOISE_FILTER;
-		devc->cur_samplerate_divider =
-			(CLOCK_RATE * 2 / samplerate) - 1;
+		devc->cur_samplerate_divider = (CLOCK_RATE * 2 / samplerate) - 1;
 	} else {
 		sr_info("Disabling demux mode.");
 		devc->capture_flags &= ~CAPTURE_FLAG_DEMUX;
@@ -335,9 +342,8 @@ SR_PRIV int ols_set_samplerate(const struct sr_dev_inst *sdi,
 	if (devc->capture_flags & CAPTURE_FLAG_DEMUX)
 		devc->cur_samplerate *= 2;
 	if (devc->cur_samplerate != samplerate)
-		sr_info("Can't match samplerate %" PRIu64 ", using %" PRIu64
-			".",
-			samplerate, devc->cur_samplerate);
+		sr_info("Can't match samplerate %" PRIu64 ", using %"
+		       PRIu64 ".", samplerate, devc->cur_samplerate);
 
 	return SR_OK;
 }
@@ -412,11 +418,9 @@ SR_PRIV int ols_receive_data(int fd, int revents, void *cb_data)
 			 * Got a full sample. Convert from the OLS's little-endian
 			 * sample to the local format.
 			 */
-			sample = devc->sample[0] | (devc->sample[1] << 8) |
-				 (devc->sample[2] << 16) |
-				 (devc->sample[3] << 24);
-			sr_dbg("Received sample 0x%.*x.", devc->num_bytes * 2,
-			       sample);
+			sample = devc->sample[0] | (devc->sample[1] << 8) \
+					| (devc->sample[2] << 16) | (devc->sample[3] << 24);
+			sr_dbg("Received sample 0x%.*x.", devc->num_bytes * 2, sample);
 			if (devc->capture_flags & CAPTURE_FLAG_RLE) {
 				/*
 				 * In RLE mode the high bit of the sample is the
@@ -425,13 +429,10 @@ SR_PRIV int ols_receive_data(int fd, int revents, void *cb_data)
 				 */
 				if (devc->sample[devc->num_bytes - 1] & 0x80) {
 					/* Clear the high bit. */
-					sample &= ~(0x80 << (devc->num_bytes -
-							     1) * 8);
+					sample &= ~(0x80 << (devc->num_bytes - 1) * 8);
 					devc->rle_count = sample;
-					devc->cnt_samples_rle +=
-						devc->rle_count;
-					sr_dbg("RLE count: %u.",
-					       devc->rle_count);
+					devc->cnt_samples_rle += devc->rle_count;
+					sr_dbg("RLE count: %u.", devc->rle_count);
 					devc->num_bytes = 0;
 					return TRUE;
 				}
@@ -439,8 +440,7 @@ SR_PRIV int ols_receive_data(int fd, int revents, void *cb_data)
 			devc->num_samples += devc->rle_count + 1;
 			if (devc->num_samples > devc->limit_samples) {
 				/* Save us from overrunning the buffer. */
-				devc->rle_count -=
-					devc->num_samples - devc->limit_samples;
+				devc->rle_count -= devc->num_samples - devc->limit_samples;
 				devc->num_samples = devc->limit_samples;
 			}
 
@@ -451,41 +451,38 @@ SR_PRIV int ols_receive_data(int fd, int revents, void *cb_data)
 				 * hardware and the PC. Expand that here before
 				 * submitting it over the session bus --
 				 * whatever is listening on the bus will be
-				 * expecting a full sample of devc->unitsize bytes,
-				 * based on the maximum number of channels.
-				 * For simplicity we expand the sample to 32 bits
-				 * little endian, and crop below
+				 * expecting a full 32-bit sample, based on
+				 * the number of channels.
 				 */
 				j = 0;
-				uint8_t tmp_sample[4] = { 0, 0, 0, 0 };
+				memset(devc->tmp_sample, 0, 4);
 				for (i = 0; i < 4; i++) {
-					if (((devc->capture_flags >> 2) &
-					     (1 << i)) == 0) {
+					if (((devc->capture_flags >> 2) & (1 << i)) == 0) {
 						/*
 						 * This channel group was
 						 * enabled, copy from received
 						 * sample.
 						 */
-						tmp_sample[i] =
-							devc->sample[j++];
+						devc->tmp_sample[i] = devc->sample[j++];
+					} else if (devc->capture_flags & CAPTURE_FLAG_DEMUX && (i > 2)) {
+						/* group 2 & 3 get added to 0 & 1 */
+						devc->tmp_sample[i - 2] = devc->sample[j++];
 					}
 				}
-				memcpy(devc->sample, tmp_sample, 4);
+				memcpy(devc->sample, devc->tmp_sample, 4);
 				sr_spew("Expanded sample: 0x%.2hhx%.2hhx%.2hhx%.2hhx ",
-					devc->sample[3], devc->sample[2],
-					devc->sample[1], devc->sample[0]);
+					devc->sample[3], devc->sample[2], devc->sample[1], devc->sample[0]);
 			}
 
 			/*
 			 * the OLS sends its sample buffer backwards.
 			 * store it in reverse order here, so we can dump
 			 * this on the session bus later.
-			 * Here cropping to devc->unitsize happens
 			 */
-			offset = (devc->limit_samples - devc->num_samples) * devc->unitsize;
+			offset = (devc->limit_samples - devc->num_samples) * 4;
 			for (i = 0; i <= devc->rle_count; i++) {
-				memcpy(devc->raw_sample_buf + offset + (i * devc->unitsize),
-				       devc->sample, devc->unitsize);
+				memcpy(devc->raw_sample_buf + offset + (i * 4),
+				       devc->sample, 4);
 			}
 			memset(devc->sample, 0, 4);
 			devc->num_bytes = 0;
@@ -498,8 +495,8 @@ SR_PRIV int ols_receive_data(int fd, int revents, void *cb_data)
 		 * Send the (properly-ordered) buffer to the frontend.
 		 */
 		sr_dbg("Received %d bytes, %d samples, %d decompressed samples.",
-		       devc->cnt_bytes, devc->cnt_samples,
-		       devc->cnt_samples_rle);
+				devc->cnt_bytes, devc->cnt_samples,
+				devc->cnt_samples_rle);
 		if (devc->trigger_at_smpl != OLS_NO_TRIGGER) {
 			/*
 			 * A trigger was set up, so we need to tell the frontend
@@ -509,12 +506,10 @@ SR_PRIV int ols_receive_data(int fd, int revents, void *cb_data)
 				/* There are pre-trigger samples, send those first. */
 				packet.type = SR_DF_LOGIC;
 				packet.payload = &logic;
-				logic.length = devc->trigger_at_smpl * devc->unitsize;
-				logic.unitsize = devc->unitsize;
+				logic.length = devc->trigger_at_smpl * 4;
+				logic.unitsize = 4;
 				logic.data = devc->raw_sample_buf +
-					     (devc->limit_samples -
-					      devc->num_samples) *
-						     devc->unitsize;
+					(devc->limit_samples - devc->num_samples) * 4;
 				sr_session_send(sdi, &packet);
 			}
 
@@ -523,19 +518,14 @@ SR_PRIV int ols_receive_data(int fd, int revents, void *cb_data)
 		}
 
 		/* Send post-trigger / all captured samples. */
-		int num_pre_trigger_samples = devc->trigger_at_smpl ==
-							      OLS_NO_TRIGGER ?
-							    0 :
-							    devc->trigger_at_smpl;
+		int num_pre_trigger_samples = devc->trigger_at_smpl == OLS_NO_TRIGGER
+			? 0 : devc->trigger_at_smpl;
 		packet.type = SR_DF_LOGIC;
 		packet.payload = &logic;
-		logic.length =
-			(devc->num_samples - num_pre_trigger_samples) * devc->unitsize;
-		logic.unitsize = devc->unitsize;
-		logic.data = devc->raw_sample_buf +
-			     (num_pre_trigger_samples + devc->limit_samples -
-			      devc->num_samples) *
-				     devc->unitsize;
+		logic.length = (devc->num_samples - num_pre_trigger_samples) * 4;
+		logic.unitsize = 4;
+		logic.data = devc->raw_sample_buf + (num_pre_trigger_samples +
+			devc->limit_samples - devc->num_samples) * 4;
 		sr_session_send(sdi, &packet);
 
 		g_free(devc->raw_sample_buf);
@@ -547,9 +537,7 @@ SR_PRIV int ols_receive_data(int fd, int revents, void *cb_data)
 	return TRUE;
 }
 
-static int
-ols_set_basic_trigger_stage(const struct ols_basic_trigger_desc *trigger_desc,
-			    struct sr_serial_dev_inst *serial, int stage)
+static int ols_set_basic_trigger_stage(const struct ols_basic_trigger_desc *trigger_desc, struct sr_serial_dev_inst *serial, int stage)
 {
 	uint8_t cmd, arg[4];
 
@@ -564,7 +552,7 @@ ols_set_basic_trigger_stage(const struct ols_basic_trigger_desc *trigger_desc,
 	cmd = CMD_SET_BASIC_TRIGGER_CONFIG0 + stage * 4;
 	arg[0] = arg[1] = arg[3] = 0x00;
 	arg[2] = stage;
-	if (stage == trigger_desc->num_stages - 1)
+	if (stage == trigger_desc->num_stages)
 		/* Last stage, fire when this one matches. */
 		arg[3] |= TRIGGER_START;
 	if (send_longcommand(serial, cmd, arg) != SR_OK)
@@ -573,8 +561,7 @@ ols_set_basic_trigger_stage(const struct ols_basic_trigger_desc *trigger_desc,
 	return SR_OK;
 }
 
-SR_PRIV int ols_prepare_acquisition(const struct sr_dev_inst *sdi)
-{
+SR_PRIV int ols_prepare_acquisition(const struct sr_dev_inst *sdi) {
 	int ret;
 
 	struct dev_context *devc = sdi->priv;
@@ -594,8 +581,7 @@ SR_PRIV int ols_prepare_acquisition(const struct sr_dev_inst *sdi)
 	 * Limit readcount to prevent reading past the end of the hardware
 	 * buffer. Rather read too many samples than too few.
 	 */
-	uint32_t samplecount =
-		MIN(devc->max_samples / num_changroups, devc->limit_samples);
+	uint32_t samplecount = MIN(devc->max_samples / num_changroups, devc->limit_samples);
 	uint32_t readcount = (samplecount + 3) / 4;
 	uint32_t delaycount;
 
@@ -615,67 +601,53 @@ SR_PRIV int ols_prepare_acquisition(const struct sr_dev_inst *sdi)
 			return SR_ERR;
 
 		delaycount = readcount * (1 - devc->capture_ratio / 100.0);
-		devc->trigger_at_smpl = (readcount - delaycount) * 4 -
-					basic_trigger_desc.num_stages;
-		for (int i = 0; i < basic_trigger_desc.num_stages; i++) {
+		devc->trigger_at_smpl = (readcount - delaycount) * 4 - basic_trigger_desc.num_stages;
+		for (int i = 0; i <= basic_trigger_desc.num_stages; i++) {
 			sr_dbg("Setting OLS stage %d trigger.", i);
-			if ((ret = ols_set_basic_trigger_stage(
-				     &basic_trigger_desc, serial, i)) != SR_OK)
+			if ((ret = ols_set_basic_trigger_stage(&basic_trigger_desc, serial, i)) != SR_OK)
 				return ret;
 		}
 	} else {
 		/* No triggers configured, force trigger on first stage. */
 		sr_dbg("Forcing trigger at stage 0.");
-		basic_trigger_desc.num_stages = 1;
-		if ((ret = ols_set_basic_trigger_stage(&basic_trigger_desc,
-						       serial, 0)) != SR_OK)
+		if ((ret = ols_set_basic_trigger_stage(&basic_trigger_desc, serial, 0)) != SR_OK)
 			return ret;
 		delaycount = readcount;
 	}
 
 	/* Samplerate. */
 	sr_dbg("Setting samplerate to %" PRIu64 "Hz (divider %u)",
-	       devc->cur_samplerate, devc->cur_samplerate_divider);
-	if (ols_send_longdata(serial, CMD_SET_DIVIDER,
-			      devc->cur_samplerate_divider & 0x00FFFFFF) != SR_OK)
+			devc->cur_samplerate, devc->cur_samplerate_divider);
+	if (ols_send_longdata(serial, CMD_SET_DIVIDER, devc->cur_samplerate_divider & 0x00FFFFFF) != SR_OK)
 		return SR_ERR;
 
 	/* Send sample limit and pre/post-trigger capture ratio. */
 	sr_dbg("Setting sample limit %d, trigger point at %d",
-	       (readcount - 1) * 4, (delaycount - 1) * 4);
+			(readcount - 1) * 4, (delaycount - 1) * 4);
 
 	if (devc->max_samples > 256 * 1024) {
-		if (ols_send_longdata(serial, CMD_CAPTURE_READCOUNT,
-				      readcount - 1) != SR_OK)
+		if (ols_send_longdata(serial, CMD_CAPTURE_READCOUNT, readcount-1) != SR_OK)
 			return SR_ERR;
-		if (ols_send_longdata(serial, CMD_CAPTURE_DELAYCOUNT,
-				      delaycount - 1) != SR_OK)
+		if (ols_send_longdata(serial, CMD_CAPTURE_DELAYCOUNT, delaycount-1) != SR_OK)
 			return SR_ERR;
 	} else {
 		uint8_t arg[4];
-		WL16(&arg[0], readcount - 1);
-		WL16(&arg[2], delaycount - 1);
+		WL16(&arg[0], readcount-1);
+		WL16(&arg[2], delaycount-1);
 		if (send_longcommand(serial, CMD_CAPTURE_SIZE, arg) != SR_OK)
 			return SR_ERR;
 	}
 
 	/* Flag register. */
-	sr_dbg("Setting intpat %s, extpat %s, RLE %s, noise_filter %s, demux %s, "
-	       "%s clock%s",
-	       devc->capture_flags & CAPTURE_FLAG_INTERNAL_TEST_MODE ? "on" :
-									     "off",
-	       devc->capture_flags & CAPTURE_FLAG_EXTERNAL_TEST_MODE ? "on" :
-									     "off",
-	       devc->capture_flags & CAPTURE_FLAG_RLE ? "on" : "off",
-	       devc->capture_flags & CAPTURE_FLAG_NOISE_FILTER ? "on" : "off",
-	       devc->capture_flags & CAPTURE_FLAG_DEMUX ? "on" : "off",
-	       devc->capture_flags & CAPTURE_FLAG_CLOCK_EXTERNAL ? "external" :
-									 "internal",
-	       devc->capture_flags & CAPTURE_FLAG_CLOCK_EXTERNAL ?
-			     (devc->capture_flags & CAPTURE_FLAG_INVERT_EXT_CLOCK ?
-				      " on falling edge" :
-				      "on rising edge") :
-			     "");
+	sr_dbg("Setting intpat %s, extpat %s, RLE %s, noise_filter %s, demux %s, %s clock%s",
+			devc->capture_flags & CAPTURE_FLAG_INTERNAL_TEST_MODE ? "on": "off",
+			devc->capture_flags & CAPTURE_FLAG_EXTERNAL_TEST_MODE ? "on": "off",
+			devc->capture_flags & CAPTURE_FLAG_RLE ? "on" : "off",
+			devc->capture_flags & CAPTURE_FLAG_NOISE_FILTER ? "on": "off",
+			devc->capture_flags & CAPTURE_FLAG_DEMUX ? "on" : "off",
+			devc->capture_flags & CAPTURE_FLAG_CLOCK_EXTERNAL ? "external" : "internal",
+			devc->capture_flags & CAPTURE_FLAG_CLOCK_EXTERNAL ? (devc->capture_flags & CAPTURE_FLAG_INVERT_EXT_CLOCK
+				? " on falling edge" : "on rising edge") : "");
 
 	/*
 	 * Enable/disable OLS channel groups in the flag register according

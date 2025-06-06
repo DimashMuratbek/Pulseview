@@ -35,34 +35,24 @@
 #define NUM_TRIGGER_STAGES	4
 
 #define MAX_RENUM_DELAY_MS	3000
-#define NUM_SIMUL_TRANSFERS	64  /* Increased from 32 to handle more concurrent transfers */
+#define NUM_SIMUL_TRANSFERS	32
 #define MAX_EMPTY_TRANSFERS	(NUM_SIMUL_TRANSFERS * 2)
 
-#define NUM_CHANNELS		32 /* Number of channels supported */
-
-/* Buffer size definitions for 32 channels */
-#define BUFFER_SIZE_PER_CHANNEL	1024  /* Bytes per channel */
-#define TOTAL_BUFFER_SIZE	(BUFFER_SIZE_PER_CHANNEL * NUM_CHANNELS)
-
-/* USB transfer size definitions */
-#define USB_TRANSFER_SIZE	(1024 * 32)  /* 32KB transfer size */
-#define USB_NUM_TRANSFERS	8  /* Number of concurrent transfers */
+#define NUM_CHANNELS		16
 
 #define FX3_REQUIRED_VERSION_MAJOR	1
 
 #define MAX_8BIT_SAMPLE_RATE	SR_MHZ(24)
-#define MAX_32BIT_SAMPLE_RATE	SR_MHZ(100)  /*Was 16BIT*/
-/*#define MAX_32BIT_SAMPLE_RATE	SR_MHZ(200) */
+#define MAX_16BIT_SAMPLE_RATE	SR_MHZ(100)
 #define FX3_PIB_CLOCK			SR_MHZ(400)
 
 /* 6 delay states of up to 256 clock ticks */
 #define MAX_SAMPLE_DELAY	(6 * 256)
 
-#define DEV_CAPS_32BIT_POS	0   /* it was DEV_CAPS_16BIT_POS */
+#define DEV_CAPS_16BIT_POS	0
 #define DEV_CAPS_AX_ANALOG_POS	1
 
-/* it was DEV_CAPS_16BIT */
-#define DEV_CAPS_32BIT		(1 << DEV_CAPS_32BIT_POS)
+#define DEV_CAPS_16BIT		(1 << DEV_CAPS_16BIT_POS)
 #define DEV_CAPS_AX_ANALOG	(1 << DEV_CAPS_AX_ANALOG_POS)
 
 /* Protocol commands */
@@ -76,11 +66,11 @@
 
 #define CMD_START_FLAGS_CLK_CTL2	(1 << CMD_START_FLAGS_CLK_CTL2_POS)
 #define CMD_START_FLAGS_SAMPLE_8BIT	(0 << CMD_START_FLAGS_WIDE_POS)
-#define CMD_START_FLAGS_SAMPLE_32BIT	(1 << CMD_START_FLAGS_WIDE_POS) /*changed 16 to 32 */
+#define CMD_START_FLAGS_SAMPLE_16BIT	(1 << CMD_START_FLAGS_WIDE_POS)
 
 #define CMD_START_FLAGS_CLK_30MHZ	(0 << CMD_START_FLAGS_CLK_SRC_POS)
 #define CMD_START_FLAGS_CLK_48MHZ	(1 << CMD_START_FLAGS_CLK_SRC_POS)
-#define CMD_START_FLAGS_CLK_100MHZ	(2 << CMD_START_FLAGS_CLK_SRC_POS)  /*changed 100 to 200 */
+#define CMD_START_FLAGS_CLK_100MHZ	(2 << CMD_START_FLAGS_CLK_SRC_POS)
 
 
 struct cypress_fx3_profile {
@@ -141,5 +131,5 @@ SR_PRIV int cypress_fx3_dev_open(struct sr_dev_inst *sdi, struct sr_dev_driver *
 SR_PRIV struct dev_context *cypress_fx3_dev_new(void);
 SR_PRIV int cypress_fx3_start_acquisition(const struct sr_dev_inst *sdi);
 SR_PRIV void cypress_fx3_abort_acquisition(struct dev_context *devc);
-# endif
 
+#endif

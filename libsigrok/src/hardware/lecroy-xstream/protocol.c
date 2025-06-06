@@ -274,7 +274,6 @@ static int analog_channel_state_get(struct sr_scpi_dev_inst *scpi,
 	unsigned int i, j;
 	char command[MAX_COMMAND_SIZE];
 	char *tmp_str;
-	int ret;
 
 	for (i = 0; i < config->analog_channels; i++) {
 		g_snprintf(command, sizeof(command), "C%d:TRACE?", i + 1);
@@ -288,13 +287,13 @@ static int analog_channel_state_get(struct sr_scpi_dev_inst *scpi,
 		if (sr_scpi_get_string(scpi, command, &tmp_str) != SR_OK)
 			return SR_ERR;
 
-		ret = array_float_get(tmp_str, ARRAY_AND_SIZE(vdivs), &j);
-		g_free(tmp_str);
-		if (ret != SR_OK) {
+		if (array_float_get(tmp_str, ARRAY_AND_SIZE(vdivs), &j) != SR_OK) {
+			g_free(tmp_str);
 			sr_err("Could not determine array index for vertical div scale.");
 			return SR_ERR;
 		}
 
+		g_free(tmp_str);
 		state->analog_channels[i].vdiv = j;
 
 		g_snprintf(command, sizeof(command), "C%d:OFFSET?", i + 1);
@@ -307,13 +306,13 @@ static int analog_channel_state_get(struct sr_scpi_dev_inst *scpi,
 		if (sr_scpi_get_string(scpi, command, &tmp_str) != SR_OK)
 			return SR_ERR;
 
-		ret = scope_state_get_array_option(tmp_str, config->coupling_options,
-				config->num_coupling_options,
-				&state->analog_channels[i].coupling);
-		g_free(tmp_str);
-		if (ret != SR_OK)
+
+		if (scope_state_get_array_option(tmp_str, config->coupling_options,
+				 config->num_coupling_options,
+				 &state->analog_channels[i].coupling) != SR_OK)
 			return SR_ERR;
 
+		g_free(tmp_str);
 	}
 
 	return SR_OK;
@@ -528,9 +527,14 @@ SR_PRIV int lecroy_xstream_init_device(struct sr_dev_inst *sdi)
 		ch = sr_channel_new(sdi, i, SR_CHANNEL_ANALOG, channel_enabled,
 			(*scope_models[model_index].analog_names)[i]);
 
-		devc->analog_groups[i] = sr_channel_group_new(sdi,
-			(*scope_models[model_index].analog_names)[i], NULL);
+		devc->analog_groups[i] = g_malloc0(sizeof(struct sr_channel_group));
+
+		devc->analog_groups[i]->name = g_strdup(
+			(char *)(*scope_models[model_index].analog_names)[i]);
 		devc->analog_groups[i]->channels = g_slist_append(NULL, ch);
+
+		sdi->channel_groups = g_slist_append(sdi->channel_groups,
+			devc->analog_groups[i]);
 	}
 
 	devc->model_config = &scope_models[model_index];

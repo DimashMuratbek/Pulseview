@@ -29,7 +29,7 @@
 #include "libsigrok-internal.h"
 #include "protocol.h"
 
-#define DEFAULT_NUM_LOGIC_CHANNELS		13
+#define DEFAULT_NUM_LOGIC_CHANNELS		8
 #define DEFAULT_LOGIC_PATTERN			PATTERN_SIGROK
 
 #define DEFAULT_NUM_ANALOG_CHANNELS		5
@@ -149,15 +149,16 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	devc->capture_ratio = 20;
 	devc->stl = NULL;
 
-	/* Here the logic channels are created */
 	if (num_logic_channels > 0) {
 		/* Logic channels, all in one channel group. */
-		cg = sr_channel_group_new(sdi, "Logic", NULL);
+		cg = g_malloc0(sizeof(struct sr_channel_group));
+		cg->name = g_strdup("Logic");
 		for (i = 0; i < num_logic_channels; i++) {
 			sprintf(channel_name, "D%d", i);
-			ch = sr_channel_new(sdi, i, SR_CHANNEL_LOGIC, TRUE, channel_name);  /* Keep all channels enabled */
+			ch = sr_channel_new(sdi, i, SR_CHANNEL_LOGIC, TRUE, channel_name);
 			cg->channels = g_slist_append(cg->channels, ch);
 		}
+		sdi->channel_groups = g_slist_append(NULL, cg);
 	}
 
 	/* Analog channels, channel groups and pattern generators. */
@@ -172,7 +173,9 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 
 		pattern = 0;
 		/* An "Analog" channel group with all analog channels in it. */
-		acg = sr_channel_group_new(sdi, "Analog", NULL);
+		acg = g_malloc0(sizeof(struct sr_channel_group));
+		acg->name = g_strdup("Analog");
+		sdi->channel_groups = g_slist_append(sdi->channel_groups, acg);
 
 		for (i = 0; i < num_analog_channels; i++) {
 			snprintf(channel_name, 16, "A%d", i);
@@ -181,8 +184,10 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 			acg->channels = g_slist_append(acg->channels, ch);
 
 			/* Every analog channel gets its own channel group as well. */
-			cg = sr_channel_group_new(sdi, channel_name, NULL);
+			cg = g_malloc0(sizeof(struct sr_channel_group));
+			cg->name = g_strdup(channel_name);
 			cg->channels = g_slist_append(NULL, ch);
+			sdi->channel_groups = g_slist_append(sdi->channel_groups, cg);
 
 			/* Every channel gets a generator struct. */
 			ag = g_malloc(sizeof(struct analog_gen));
@@ -529,19 +534,12 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi)
 	 * involved in the acquisition. Determine an offset and a mask to
 	 * remove excess logic data content before datafeed submission.
 	 */
-
-
-
 	devc->enabled_logic_channels = 0;
 	devc->enabled_analog_channels = 0;
 	for (l = sdi->channels; l; l = l->next) {
 		ch = l->data;
-		if (!ch->enabled) 
+		if (!ch->enabled)
 			continue;
-		
-		if (ch->index == 3)  // Disable channel 3
-        	continue; // Skip channel 3 entirely
-
 		if (ch->type == SR_CHANNEL_ANALOG) {
 			devc->enabled_analog_channels++;
 			continue;
@@ -607,7 +605,7 @@ static int dev_acquisition_stop(struct sr_dev_inst *sdi)
 
 static struct sr_dev_driver demo_driver_info = {
 	.name = "demo",
-	.longname = "Demo testing 10 channels,disabled 3 and pattern generator",
+	.longname = "Demo driver and pattern generator",
 	.api_version = 1,
 	.init = std_init,
 	.cleanup = std_cleanup,

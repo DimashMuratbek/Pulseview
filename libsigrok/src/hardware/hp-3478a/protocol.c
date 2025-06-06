@@ -1,7 +1,7 @@
 /*
  * This file is part of the libsigrok project.
  *
- * Copyright (C) 2017-2021 Frank Stettner <frank-stettner@gmx.net>
+ * Copyright (C) 2017-2018 Frank Stettner <frank-stettner@gmx.net>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -69,8 +69,9 @@ SR_PRIV int hp_3478a_set_mq(const struct sr_dev_inst *sdi, enum sr_mq mq,
 	struct sr_scpi_dev_inst *scpi = sdi->conn;
 	struct dev_context *devc = sdi->priv;
 
-	/* No need to send a command if we're not changing the measurement type. */
-	if (devc->measurement_mq == mq && devc->measurement_mq_flag == mq_flags)
+	/* No need to send command if we're not changing measurement type. */
+	if (devc->measurement_mq == mq &&
+		((devc->measurement_mq_flags & mq_flags) == mq_flags))
 		return SR_OK;
 
 	for (i = 0; i < ARRAY_SIZE(sr_mq_to_cmd_map); i++) {
@@ -115,11 +116,11 @@ SR_PRIV int hp_3478a_set_digits(const struct sr_dev_inst *sdi, uint8_t digits)
 	struct sr_scpi_dev_inst *scpi = sdi->conn;
 	struct dev_context *devc = sdi->priv;
 
-	/* No need to send command if we're not changing the resolution. */
-	if (devc->digits == digits)
+	/* No need to send command if we're not changing the range. */
+	if (devc->spec_digits == digits)
 		return SR_OK;
 
-	/* digits are the total number of digits, so we have to substract 1 */
+	/* digits are based on devc->spec_digits, so we have to substract 1 */
 	ret = sr_scpi_send(scpi, "N%i", digits-1);
 	if (ret != SR_OK)
 		return ret;
@@ -131,19 +132,19 @@ static int parse_range_vdc(struct dev_context *devc, uint8_t range_byte)
 {
 	if ((range_byte & SB1_RANGE_BLOCK) == RANGE_VDC_30MV) {
 		devc->range_exp = -2;
-		devc->sr_digits = devc->digits + 1;
+		devc->enc_digits = devc->spec_digits - 2;
 	} else if ((range_byte & SB1_RANGE_BLOCK) == RANGE_VDC_300MV) {
 		devc->range_exp = -1;
-		devc->sr_digits = devc->digits;
+		devc->enc_digits = devc->spec_digits - 3;
 	} else if ((range_byte & SB1_RANGE_BLOCK) == RANGE_VDC_3V) {
 		devc->range_exp = 0;
-		devc->sr_digits = devc->digits - 1;
+		devc->enc_digits = devc->spec_digits - 1;
 	} else if ((range_byte & SB1_RANGE_BLOCK) == RANGE_VDC_30V) {
 		devc->range_exp = 1;
-		devc->sr_digits = devc->digits - 2;
+		devc->enc_digits = devc->spec_digits - 2;
 	} else if ((range_byte & SB1_RANGE_BLOCK) == RANGE_VDC_300V) {
 		devc->range_exp = 2;
-		devc->sr_digits = devc->digits - 3;
+		devc->enc_digits = devc->spec_digits - 3;
 	} else
 		return SR_ERR_DATA;
 
@@ -154,16 +155,16 @@ static int parse_range_vac(struct dev_context *devc, uint8_t range_byte)
 {
 	if ((range_byte & SB1_RANGE_BLOCK) == RANGE_VAC_300MV) {
 		devc->range_exp = -1;
-		devc->sr_digits = devc->digits;
+		devc->enc_digits = devc->spec_digits - 3;
 	} else if ((range_byte & SB1_RANGE_BLOCK) == RANGE_VAC_3V) {
 		devc->range_exp = 0;
-		devc->sr_digits = devc->digits - 1;
+		devc->enc_digits = devc->spec_digits - 1;
 	} else if ((range_byte & SB1_RANGE_BLOCK) == RANGE_VAC_30V) {
 		devc->range_exp = 1;
-		devc->sr_digits = devc->digits - 2;
+		devc->enc_digits = devc->spec_digits - 2;
 	} else if ((range_byte & SB1_RANGE_BLOCK) == RANGE_VAC_300V) {
 		devc->range_exp = 2;
-		devc->sr_digits = devc->digits - 3;
+		devc->enc_digits = devc->spec_digits - 3;
 	} else
 		return SR_ERR_DATA;
 
@@ -174,10 +175,10 @@ static int parse_range_a(struct dev_context *devc, uint8_t range_byte)
 {
 	if ((range_byte & SB1_RANGE_BLOCK) == RANGE_A_300MA) {
 		devc->range_exp = -1;
-		devc->sr_digits = devc->digits;
+		devc->enc_digits = devc->spec_digits - 3;
 	} else if ((range_byte & SB1_RANGE_BLOCK) == RANGE_A_3A) {
 		devc->range_exp = 0;
-		devc->sr_digits = devc->digits - 1;
+		devc->enc_digits = devc->spec_digits - 1;
 	} else
 		return SR_ERR_DATA;
 
@@ -188,25 +189,25 @@ static int parse_range_ohm(struct dev_context *devc, uint8_t range_byte)
 {
 	if ((range_byte & SB1_RANGE_BLOCK) == RANGE_OHM_30R) {
 		devc->range_exp = 1;
-		devc->sr_digits = devc->digits - 2;
+		devc->enc_digits = devc->spec_digits - 2;
 	} else if ((range_byte & SB1_RANGE_BLOCK) == RANGE_OHM_300R) {
 		devc->range_exp = 2;
-		devc->sr_digits = devc->digits - 3;
+		devc->enc_digits = devc->spec_digits - 3;
 	} else if ((range_byte & SB1_RANGE_BLOCK) == RANGE_OHM_3KR) {
 		devc->range_exp = 3;
-		devc->sr_digits = devc->digits - 4;
+		devc->enc_digits = devc->spec_digits - 1;
 	} else if ((range_byte & SB1_RANGE_BLOCK) == RANGE_OHM_30KR) {
 		devc->range_exp = 4;
-		devc->sr_digits = devc->digits - 5;
+		devc->enc_digits = devc->spec_digits - 2;
 	} else if ((range_byte & SB1_RANGE_BLOCK) == RANGE_OHM_300KR) {
 		devc->range_exp = 5;
-		devc->sr_digits = devc->digits - 6;
+		devc->enc_digits = devc->spec_digits - 3;
 	} else if ((range_byte & SB1_RANGE_BLOCK) == RANGE_OHM_3MR) {
 		devc->range_exp = 6;
-		devc->sr_digits = devc->digits - 7;
+		devc->enc_digits = devc->spec_digits - 1;
 	} else if ((range_byte & SB1_RANGE_BLOCK) == RANGE_OHM_30MR) {
 		devc->range_exp = 7;
-		devc->sr_digits = devc->digits - 8;
+		devc->enc_digits = devc->spec_digits - 2;
 	} else
 		return SR_ERR_DATA;
 
@@ -215,28 +216,28 @@ static int parse_range_ohm(struct dev_context *devc, uint8_t range_byte)
 
 static int parse_function_byte(struct dev_context *devc, uint8_t function_byte)
 {
-	/* Digits / Resolution (digits must be set before range parsing) */
+	/* Digits / Resolution (spec_digits must be set before range parsing) */
 	if ((function_byte & SB1_DIGITS_BLOCK) == DIGITS_5_5)
-		devc->digits = 6;
+		devc->spec_digits = 6;
 	else if ((function_byte & SB1_DIGITS_BLOCK) == DIGITS_4_5)
-		devc->digits = 5;
+		devc->spec_digits = 5;
 	else if ((function_byte & SB1_DIGITS_BLOCK) == DIGITS_3_5)
-		devc->digits = 4;
+		devc->spec_digits = 4;
 	else
 		return SR_ERR_DATA;
 
 	/* Function + Range */
-	devc->measurement_mq_flag = 0;
+	devc->measurement_mq_flags = 0;
 	devc->acquisition_mq_flags = 0;
 	if ((function_byte & SB1_FUNCTION_BLOCK) == FUNCTION_VDC) {
 		devc->measurement_mq = SR_MQ_VOLTAGE;
-		devc->measurement_mq_flag = SR_MQFLAG_DC;
+		devc->measurement_mq_flags |= SR_MQFLAG_DC;
 		devc->acquisition_mq_flags |= SR_MQFLAG_DC;
 		devc->measurement_unit = SR_UNIT_VOLT;
 		parse_range_vdc(devc, function_byte);
 	} else if ((function_byte & SB1_FUNCTION_BLOCK) == FUNCTION_VAC) {
 		devc->measurement_mq = SR_MQ_VOLTAGE;
-		devc->measurement_mq_flag = SR_MQFLAG_AC;
+		devc->measurement_mq_flags |= SR_MQFLAG_AC;
 		devc->acquisition_mq_flags |= SR_MQFLAG_AC | SR_MQFLAG_RMS;
 		devc->measurement_unit = SR_UNIT_VOLT;
 		parse_range_vac(devc, function_byte);
@@ -246,19 +247,19 @@ static int parse_function_byte(struct dev_context *devc, uint8_t function_byte)
 		parse_range_ohm(devc, function_byte);
 	} else if ((function_byte & SB1_FUNCTION_BLOCK) == FUNCTION_4WR) {
 		devc->measurement_mq = SR_MQ_RESISTANCE;
-		devc->measurement_mq_flag = SR_MQFLAG_FOUR_WIRE;
+		devc->measurement_mq_flags |= SR_MQFLAG_FOUR_WIRE;
 		devc->acquisition_mq_flags |= SR_MQFLAG_FOUR_WIRE;
 		devc->measurement_unit = SR_UNIT_OHM;
 		parse_range_ohm(devc, function_byte);
 	} else if ((function_byte & SB1_FUNCTION_BLOCK) == FUNCTION_ADC) {
 		devc->measurement_mq = SR_MQ_CURRENT;
-		devc->measurement_mq_flag = SR_MQFLAG_DC;
+		devc->measurement_mq_flags |= SR_MQFLAG_DC;
 		devc->acquisition_mq_flags |= SR_MQFLAG_DC;
 		devc->measurement_unit = SR_UNIT_AMPERE;
 		parse_range_a(devc, function_byte);
 	} else if ((function_byte & SB1_FUNCTION_BLOCK) == FUNCTION_AAC) {
 		devc->measurement_mq = SR_MQ_CURRENT;
-		devc->measurement_mq_flag = SR_MQFLAG_AC;
+		devc->measurement_mq_flags |= SR_MQFLAG_AC;
 		devc->acquisition_mq_flags |= SR_MQFLAG_AC | SR_MQFLAG_RMS;
 		devc->measurement_unit = SR_UNIT_AMPERE;
 		parse_range_a(devc, function_byte);
@@ -443,7 +444,7 @@ static void acq_send_measurement(struct sr_dev_inst *sdi)
 	packet.type = SR_DF_ANALOG;
 	packet.payload = &analog;
 
-	sr_analog_init(&analog, &encoding, &meaning, &spec, devc->sr_digits);
+	sr_analog_init(&analog, &encoding, &meaning, &spec, devc->enc_digits);
 
 	/* TODO: Implement NAN, depending on counts, range and value. */
 	f = devc->measurement;
@@ -452,14 +453,14 @@ static void acq_send_measurement(struct sr_dev_inst *sdi)
 
 	encoding.unitsize = sizeof(float);
 	encoding.is_float = TRUE;
-	encoding.digits = devc->sr_digits;
+	encoding.digits = devc->enc_digits;
 
 	meaning.mq = devc->measurement_mq;
 	meaning.mqflags = devc->acquisition_mq_flags;
 	meaning.unit = devc->measurement_unit;
 	meaning.channels = sdi->channels;
 
-	spec.spec_digits = devc->sr_digits;
+	spec.spec_digits = devc->spec_digits;
 
 	sr_session_send(sdi, &packet);
 }
@@ -489,7 +490,7 @@ SR_PRIV int hp_3478a_receive_data(int fd, int revents, void *cb_data)
 	 */
 	if (sr_scpi_gpib_spoll(scpi, &status_register) != SR_OK)
 		return FALSE;
-	if (!(((uint8_t)status_register) & SRQ_BUS_AVAIL))
+	if (!(((uint8_t)status_register) & 0x01))
 		return TRUE;
 
 	/* Get a reading from the DMM. */

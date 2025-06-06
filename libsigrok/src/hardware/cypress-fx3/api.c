@@ -28,7 +28,7 @@ static const struct cypress_fx3_profile supported_fx3[] = {
 	 */
 	{ 0x04b4, 0x1234, "Cypress", "FX3", NULL,
 		"cypress-fx3.fw",
-		DEV_CAPS_32BIT, NULL, NULL},  /* Set back to 32-bit to enable all 32 channels */
+		DEV_CAPS_16BIT, NULL, NULL},
 
 	ALL_ZERO
 };
@@ -66,8 +66,7 @@ static const uint64_t samplerates[] = {
 	SR_MHZ(10),
 	SR_MHZ(25),
 	SR_MHZ(50),
-	SR_MHZ(100),
-	/*SR_MHZ(200),*/
+	SR_MHZ(100), 
 };
 
 static gboolean is_plausible(const struct libusb_device_descriptor *des)
@@ -103,7 +102,7 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	int num_logic_channels = 0, num_analog_channels = 0;
 	const char *conn;
 	char manufacturer[64], product[64], serial_num[64], connection_id[64];
-	char channel_name[32];  /*Was 16 change to 32*/
+	char channel_name[16];
 
 	drvc = di->context;
 	
@@ -211,7 +210,7 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 		sdi->connection_id = g_strdup(connection_id);
 
 		/* Fill in channellist according to this device's profile. */
-		num_logic_channels = prof->dev_caps & DEV_CAPS_32BIT ? 32 : 16;  /* Enable 32 channels when 32-bit capable */
+		num_logic_channels = prof->dev_caps & DEV_CAPS_16BIT ? 16 : 8;
 		num_analog_channels = prof->dev_caps & DEV_CAPS_AX_ANALOG ? 1 : 0;
 
 		/* Logic channels, all in one channel group. */
@@ -220,13 +219,13 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 		for (j = 0; j < num_logic_channels; j++) {
 			sprintf(channel_name, "D%d", j);
 			ch = sr_channel_new(sdi, j, SR_CHANNEL_LOGIC,
-						TRUE, channel_name);  /* Enable all channels by default */
+						TRUE, channel_name);
 			cg->channels = g_slist_append(cg->channels, ch);
 		}
 		sdi->channel_groups = g_slist_append(NULL, cg);
 
 		for (j = 0; j < num_analog_channels; j++) {
-			snprintf(channel_name, 32, "A%d", j);   /*changed 16 to 32*/
+			snprintf(channel_name, 16, "A%d", j);
 			ch = sr_channel_new(sdi, j + num_logic_channels,
 					SR_CHANNEL_ANALOG, TRUE, channel_name);
 
@@ -259,7 +258,7 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 				/* Store when this device's FW was updated. */
 				devc->fw_updated = g_get_monotonic_time();
 				/*Add delay for the device to re-enumerat in SuperSpeed*/
-				g_usleep(1000 * 3000);  /*was 1000 * 1000  */
+				g_usleep(1000 * 1000);
 				devices = g_slist_remove(devices, sdi);
 				/* Rescan and refresh the device list. 
 				   This is needed as the device renumerates as a SuperSpeed device */

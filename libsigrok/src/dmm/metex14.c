@@ -195,6 +195,8 @@ static void handle_flags(struct sr_datafeed_analog *analog, float *floatval,
 {
 	int factor;
 
+	(void)exponent;
+
 	/* Factors */
 	factor = 0;
 	if (info->is_pico)
@@ -210,7 +212,6 @@ static void handle_flags(struct sr_datafeed_analog *analog, float *floatval,
 	if (info->is_mega)
 		factor += 6;
 	*floatval *= powf(10, factor);
-	*exponent += factor;
 
 	/* Measurement modes */
 	if (info->is_volt) {

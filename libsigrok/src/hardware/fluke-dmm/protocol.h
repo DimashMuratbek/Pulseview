@@ -29,12 +29,10 @@
 
 /* Supported models */
 enum {
-	FLUKE_87 = 1,
-	FLUKE_89,
-	FLUKE_187,
+	FLUKE_187 = 1,
 	FLUKE_189,
-	FLUKE_190,
 	FLUKE_287,
+	FLUKE_190,
 	FLUKE_289,
 };
 
@@ -62,10 +60,6 @@ struct dev_context {
 	enum sr_unit unit;
 	enum sr_mqflag mqflags;
 };
-
-SR_PRIV void fluke_handle_qm_18x(const struct sr_dev_inst *sdi, char **tokens);
-SR_PRIV void fluke_handle_qm_190(const struct sr_dev_inst *sdi, char **tokens);
-SR_PRIV void fluke_handle_qm_28x(const struct sr_dev_inst *sdi, char **tokens);
 
 SR_PRIV int fluke_receive_data(int fd, int revents, void *cb_data);
 

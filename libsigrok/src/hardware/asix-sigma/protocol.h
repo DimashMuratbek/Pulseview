@@ -330,7 +330,6 @@ struct dev_context {
 		uint16_t prefix;
 		enum asix_device_type type;
 	} id;
-	char **channel_names;
 	struct {
 		struct ftdi_context ctx;
 		gboolean is_open, must_close;

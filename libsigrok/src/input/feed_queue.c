@@ -22,7 +22,7 @@
 #include <string.h>
 
 struct feed_queue_logic {
-	const struct sr_dev_inst *sdi;
+	struct sr_dev_inst *sdi;
 	size_t unit_size;
 	size_t alloc_count;
 	size_t fill_count;
@@ -31,8 +31,7 @@ struct feed_queue_logic {
 	struct sr_datafeed_logic logic;
 };
 
-SR_API struct feed_queue_logic *feed_queue_logic_alloc(
-	const struct sr_dev_inst *sdi,
+SR_API struct feed_queue_logic *feed_queue_logic_alloc(struct sr_dev_inst *sdi,
 	size_t sample_count, size_t unit_size)
 {
 	struct feed_queue_logic *q;
@@ -57,46 +56,17 @@ SR_API struct feed_queue_logic *feed_queue_logic_alloc(
 	return q;
 }
 
-SR_API int feed_queue_logic_submit_one(struct feed_queue_logic *q,
-	const uint8_t *data, size_t repeat_count)
+SR_API int feed_queue_logic_submit(struct feed_queue_logic *q,
+	const uint8_t *data, size_t count)
 {
 	uint8_t *wrptr;
 	int ret;
 
 	wrptr = &q->data_bytes[q->fill_count * q->unit_size];
-	while (repeat_count--) {
+	while (count--) {
 		memcpy(wrptr, data, q->unit_size);
 		wrptr += q->unit_size;
 		q->fill_count++;
-		if (q->fill_count == q->alloc_count) {
-			ret = feed_queue_logic_flush(q);
-			if (ret != SR_OK)
-				return ret;
-			wrptr = &q->data_bytes[0];
-		}
-	}
-
-	return SR_OK;
-}
-
-SR_API int feed_queue_logic_submit_many(struct feed_queue_logic *q,
-	const uint8_t *data, size_t samples_count)
-{
-	uint8_t *wrptr;
-	size_t space, copy_count;
-	int ret;
-
-	wrptr = &q->data_bytes[q->fill_count * q->unit_size];
-	while (samples_count) {
-		space = q->alloc_count - q->fill_count;
-		copy_count = samples_count;
-		if (copy_count > space)
-			copy_count = space;
-		memcpy(wrptr, data, copy_count * q->unit_size);
-		data += copy_count * q->unit_size;
-		samples_count -= copy_count;
-		wrptr += copy_count * q->unit_size;
-		q->fill_count += copy_count;
 		if (q->fill_count == q->alloc_count) {
 			ret = feed_queue_logic_flush(q);
 			if (ret != SR_OK)
@@ -124,21 +94,6 @@ SR_API int feed_queue_logic_flush(struct feed_queue_logic *q)
 	return SR_OK;
 }
 
-SR_API int feed_queue_logic_send_trigger(struct feed_queue_logic *q)
-{
-	int ret;
-
-	ret = feed_queue_logic_flush(q);
-	if (ret != SR_OK)
-		return ret;
-
-	ret = std_session_send_df_trigger(q->sdi);
-	if (ret != SR_OK)
-		return ret;
-
-	return SR_OK;
-}
-
 SR_API void feed_queue_logic_free(struct feed_queue_logic *q)
 {
 
@@ -150,7 +105,7 @@ SR_API void feed_queue_logic_free(struct feed_queue_logic *q)
 }
 
 struct feed_queue_analog {
-	const struct sr_dev_inst *sdi;
+	struct sr_dev_inst *sdi;
 	size_t alloc_count;
 	size_t fill_count;
 	float *data_values;
@@ -163,8 +118,7 @@ struct feed_queue_analog {
 	GSList *channels;
 };
 
-SR_API struct feed_queue_analog *feed_queue_analog_alloc(
-	const struct sr_dev_inst *sdi,
+SR_API struct feed_queue_analog *feed_queue_analog_alloc(struct sr_dev_inst *sdi,
 	size_t sample_count, int digits, struct sr_channel *ch)
 {
 	struct feed_queue_analog *q;
@@ -191,51 +145,12 @@ SR_API struct feed_queue_analog *feed_queue_analog_alloc(
 	return q;
 }
 
-SR_API int feed_queue_analog_mq_unit(struct feed_queue_analog *q,
-	enum sr_mq mq, enum sr_mqflag mq_flag, enum sr_unit unit)
+SR_API int feed_queue_analog_submit(struct feed_queue_analog *q,
+	float data, size_t count)
 {
 	int ret;
 
-	if (!q)
-		return SR_ERR_ARG;
-
-	ret = feed_queue_analog_flush(q);
-	if (ret != SR_OK)
-		return ret;
-
-	q->meaning.mq = mq;
-	q->meaning.mqflags = mq_flag;
-	q->meaning.unit = unit;
-
-	return SR_OK;
-}
-
-SR_API int feed_queue_analog_scale_offset(struct feed_queue_analog *q,
-	const struct sr_rational *scale, const struct sr_rational *offset)
-{
-	int ret;
-
-	if (!q)
-		return SR_ERR_ARG;
-
-	ret = feed_queue_analog_flush(q);
-	if (ret != SR_OK)
-		return ret;
-
-	if (scale)
-		q->encoding.scale = *scale;
-	if (offset)
-		q->encoding.offset = *offset;
-
-	return SR_OK;
-}
-
-SR_API int feed_queue_analog_submit_one(struct feed_queue_analog *q,
-	float data, size_t repeat_count)
-{
-	int ret;
-
-	while (repeat_count--) {
+	while (count--) {
 		q->data_values[q->fill_count++] = data;
 		if (q->fill_count == q->alloc_count) {
 			ret = feed_queue_analog_flush(q);

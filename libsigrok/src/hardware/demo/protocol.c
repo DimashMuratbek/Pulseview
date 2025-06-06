@@ -29,6 +29,7 @@
 #include "libsigrok-internal.h"
 #include "protocol.h"
 
+
 #define ANALOG_SAMPLES_PER_PERIOD 20
 
 static const uint8_t pattern_sigrok[] = {
@@ -291,11 +292,6 @@ static void logic_generator(struct sr_dev_inst *sdi, uint64_t size)
 		memset(devc->logic_data, 0x00, size);
 		for (i = 0; i < size; i += devc->logic_unitsize) {
 			for (j = 0; j < devc->logic_unitsize; j++) {
-            	if (j == 3) {  // Disable channel 3 (D2)
-                	devc->logic_data[i + j] = 0;
-                	continue;
-           		 }	
-
 				pat = pattern_sigrok[(devc->step + j) % sizeof(pattern_sigrok)] >> 1;
 				devc->logic_data[i + j] = ~pat;
 			}
@@ -383,12 +379,13 @@ static void logic_generator(struct sr_dev_inst *sdi, uint64_t size)
  * TODO: Need we apply a channel map, and enforce a dense representation
  * of the enabled channels' data?
  */
-static void logic_fixup_feed(struct dev_context *devc, struct sr_datafeed_logic *logic)
+static void logic_fixup_feed(struct dev_context *devc,
+		struct sr_datafeed_logic *logic)
 {
 	size_t fp_off;
 	uint8_t fp_mask;
 	size_t off, idx;
-	uint16_t *sample;
+	uint8_t *sample;
 
 	fp_off = devc->first_partial_logic_index;
 	fp_mask = devc->first_partial_logic_mask;
@@ -397,12 +394,7 @@ static void logic_fixup_feed(struct dev_context *devc, struct sr_datafeed_logic 
 
 	for (off = 0; off < logic->length; off += logic->unitsize) {
 		sample = logic->data + off;
-
-		// Disable channel 6 (bit 6), force to be 0 
-		sample[0] &= ~(1 << 10);
-		
-		//sample[fp_off] &= fp_mask;
-
+		sample[fp_off] &= fp_mask;
 		for (idx = fp_off + 1; idx < logic->unitsize; idx++)
 			sample[idx] = 0x00;
 	}

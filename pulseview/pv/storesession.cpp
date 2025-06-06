@@ -185,8 +185,17 @@ bool StoreSession::start()
 				any_segment->samplerate())}});
 		output_->receive(meta);
 
-		auto header = context->create_header_packet(session_.get_acquisition_start_time());
-		output_->receive(header);
+		// Convert acquisition start time from Glib::DateTime to Glib::TimeVal.
+                Glib::DateTime acq_time = session_.get_acquisition_start_time();
+                Glib::TimeVal tv;
+                if (!acq_time.to_timeval(tv)) {
+                        // Optionally handle error if conversion fails.
+                              }
+                auto header = context->create_header_packet(tv);
+                output_->receive(header);
+
+
+
 	} catch (Error& error) {
 		error_ = tr("Error while saving: ") + error.what();
 		return false;
