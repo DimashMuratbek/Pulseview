@@ -98,6 +98,10 @@ const int AnalogSignal::InfoTextMarginBottom = 5;
 
 AnalogSignal::AnalogSignal(pv::Session &session, shared_ptr<data::SignalBase> base) :
 	LogicSignal(session, base),
+	//signal_min_(std::numeric_limits<double>::quiet_NaN()),
+	//signal_max_(std::numeric_limits<double>::quiet_NaN()),
+
+
 	value_at_hover_pos_(std::numeric_limits<float>::quiet_NaN()),
 	scale_index_(4), // 20 per div
 	pos_vdivs_(1),
@@ -305,13 +309,13 @@ void AnalogSignal::paint_fore(QPainter &p, ViewItemPaintParams &pp)
 
 
 		// Print debug info to see what causing yV
-        // qDebug() << "[AnalogSignal::paint_fore]"
-        //          << "signal_min=" << signal_min_
-        //          << "signal_max=" << signal_max_
-        //          << "hover=" << value_at_hover_pos_
-        //          << "show_hover_marker=" << show_hover_marker_
-        //          << "isnan(hover)=" << std::isnan(value_at_hover_pos_)
-        //          << "resolution(V/div)=" << resolution_;
+        qDebug() << "[AnalogSignal::paint_fore]"
+                 << "signal_min=" << signal_min_
+                 << "signal_max=" << signal_max_
+                 << "hover=" << value_at_hover_pos_
+                 << "show_hover_marker=" << show_hover_marker_
+                 << "isnan(hover)=" << std::isnan(value_at_hover_pos_)
+                 << "resolution(V/div)=" << resolution_;
 
 		SIPrefix prefix;
 
@@ -692,11 +696,22 @@ void AnalogSignal::perform_autoranging(bool keep_divs, bool force_update)
 
 	double min = 0, max = 0;
 
+	// double min =  std::numeric_limits<double>::infinity();
+	// double max = -std::numeric_limits<double>::infinity();
+
+
 	for (const shared_ptr<pv::data::AnalogSegment>& segment : segments) {
 		pair<double, double> mm = segment->get_min_max();
 		min = std::min(min, mm.first);
 		max = std::max(max, mm.second);
 	}
+
+	
+
+	// if (!std::isfinite(min) || !std::isfinite(max))
+    // return;
+
+
 
 	if ((min == signal_min_) && (max == signal_max_) && !force_update)
 		return;
@@ -749,6 +764,12 @@ void AnalogSignal::perform_autoranging(bool keep_divs, bool force_update)
 			scale_index_ = i;
 			break;
 		}
+
+
+	qDebug() << "[perform_autoranging] min=" << min
+         << "max=" << max
+         << "min_value_per_div=" << min_value_per_div
+         << "old_index=" << scale_index_;
 
 	update_scale();
 }
@@ -965,7 +986,7 @@ void AnalogSignal::on_setting_changed(const QString &key, const QVariant &value)
 void AnalogSignal::on_min_max_changed(float min, float max)
 {
 	if (autoranging_)
-		perform_autoranging(false, false);
+		perform_autoranging(false, true);
 	else {
 		if (min < signal_min_) signal_min_ = min;
 		if (max > signal_max_) signal_max_ = max;
