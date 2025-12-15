@@ -303,11 +303,32 @@ void AnalogSignal::paint_fore(QPainter &p, ViewItemPaintParams &pp)
 
 		QString infotext;
 
+
+		// Print debug info to see what causing yV
+        // qDebug() << "[AnalogSignal::paint_fore]"
+        //          << "signal_min=" << signal_min_
+        //          << "signal_max=" << signal_max_
+        //          << "hover=" << value_at_hover_pos_
+        //          << "show_hover_marker=" << show_hover_marker_
+        //          << "isnan(hover)=" << std::isnan(value_at_hover_pos_)
+        //          << "resolution(V/div)=" << resolution_;
+
 		SIPrefix prefix;
-		if (fabs(signal_max_) > fabs(signal_min_))
-			prefix = determine_value_prefix(fabs(signal_max_));
-		else
-			prefix = determine_value_prefix(fabs(signal_min_));
+
+		// Prefer hover value when available (display actual values)
+		if (show_hover_marker_ && !std::isnan(value_at_hover_pos_)) {
+			prefix = determine_value_prefix(std::fabs(value_at_hover_pos_));
+		} else {
+			// Fallback to range-based prefix, but guard against 0/garbage
+			const double abs_max = std::max(std::fabs(signal_max_), std::fabs(signal_min_));
+			prefix = determine_value_prefix(abs_max > 0.0 ? abs_max : 1.0); // 1.0V safe default
+		}
+
+		// Determine the SI prefix to use for the info text (Original code)
+		// if (fabs(signal_max_) > fabs(signal_min_))
+		// 	prefix = determine_value_prefix(fabs(signal_max_));
+		// else
+		// 	prefix = determine_value_prefix(fabs(signal_min_));
 
 		// Show the info section on the right side of the trace, including
 		// the value at the hover point when the hover marker is enabled
