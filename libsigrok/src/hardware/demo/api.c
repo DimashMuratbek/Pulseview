@@ -357,11 +357,11 @@ static int config_set(uint32_t key, GVariant *data,
 		break;
 	case SR_CONF_AVERAGING:
 		devc->avg = g_variant_get_boolean(data);
-		sr_dbg("%s averaging", devc->avg ? "Enabling" : "Disabling");
+		sr_err("%s averaging", devc->avg ? "Enabling" : "Disabling");
 		break;
 	case SR_CONF_AVG_SAMPLES:
 		devc->avg_samples = g_variant_get_uint64(data);
-		sr_dbg("Setting averaging rate to %" PRIu64, devc->avg_samples);
+		sr_err("Setting averaging rate to %" PRIu64, devc->avg_samples);
 		break;
 	case SR_CONF_MEASURED_QUANTITY:
 		if (!cg)
@@ -390,7 +390,7 @@ static int config_set(uint32_t key, GVariant *data,
 			if (ch->type == SR_CHANNEL_LOGIC) {
 				if (logic_pattern == -1)
 					return SR_ERR_ARG;
-				sr_dbg("Setting logic pattern to %s",
+				sr_err("Setting logic pattern to %s",
 						logic_pattern_str[logic_pattern]);
 				devc->logic_pattern = logic_pattern;
 				/* Might as well do this now, these are static. */
@@ -401,7 +401,7 @@ static int config_set(uint32_t key, GVariant *data,
 			} else if (ch->type == SR_CHANNEL_ANALOG) {
 				if (analog_pattern == -1)
 					return SR_ERR_ARG;
-				sr_dbg("Setting analog pattern for channel %s to %s",
+				sr_err("Setting analog pattern for channel %s to %s",
 						ch->name, analog_pattern_str[analog_pattern]);
 				ag = g_hash_table_lookup(devc->ch_ag, ch);
 				ag->pattern = analog_pattern;
@@ -497,6 +497,7 @@ static int config_list(uint32_t key, GVariant **data,
 
 static int dev_acquisition_start(const struct sr_dev_inst *sdi)
 {
+	
 	struct dev_context *devc;
 	GSList *l;
 	struct sr_channel *ch;
@@ -562,7 +563,7 @@ static int dev_acquisition_start(const struct sr_dev_inst *sdi)
 	bitpos = devc->enabled_logic_channels % 8;
 	mask = (1 << bitpos) - 1;
 	devc->first_partial_logic_mask = mask;
-	sr_dbg("num logic %zu, partial off %zu, mask 0x%02x.",
+	sr_err("num logic %zu, partial off %zu, mask 0x%02x.",
 		devc->enabled_logic_channels,
 		devc->first_partial_logic_index,
 		devc->first_partial_logic_mask);

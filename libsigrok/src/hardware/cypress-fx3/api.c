@@ -21,6 +21,8 @@
 #include <config.h>
 #include "protocol.h"
 #include <math.h>
+#include <libsigrok/libsigrok.h>
+
 
 static const struct cypress_fx3_profile supported_fx3[] = {
 	/*
@@ -210,8 +212,11 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 		sdi->connection_id = g_strdup(connection_id);
 
 		/* Fill in channellist according to this device's profile. */
-		num_logic_channels = prof->dev_caps & DEV_CAPS_16BIT ? 16 : 8;
-		num_analog_channels = prof->dev_caps & DEV_CAPS_AX_ANALOG ? 1 : 0;
+		// num_logic_channels = prof->dev_caps & DEV_CAPS_16BIT ? 16 : 0;   // 16: 8
+
+		num_logic_channels= NUM_LOGIC_CHANNELS;
+		//num_analog_channels = prof->dev_caps & DEV_CAPS_AX_ANALOG ? 1 : 0;
+		num_analog_channels = NUM_ANALOG_CHANNELS;
 
 		/* Logic channels, all in one channel group. */
 		cg = g_malloc0(sizeof(struct sr_channel_group));
@@ -225,9 +230,10 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 		sdi->channel_groups = g_slist_append(NULL, cg);
 
 		for (j = 0; j < num_analog_channels; j++) {
-			snprintf(channel_name, 16, "A%d", j);
+			snprintf(channel_name, num_analog_channels, "A%d", j);
 			ch = sr_channel_new(sdi, j + num_logic_channels,
 					SR_CHANNEL_ANALOG, TRUE, channel_name);
+
 
 			/* Every analog channel gets its own channel group. */
 			cg = g_malloc0(sizeof(struct sr_channel_group));
@@ -500,7 +506,7 @@ static int cypress_fx3_acquisition_stop(struct sr_dev_inst *sdi)
 
 static struct sr_dev_driver cypress_fx3_driver_info = {
 	.name = "cypress-fx3",
-	.longname = "cypress-fx3 (generic driver for FX3 based LAs)",
+	.longname = "cypress-fx3 V22 (generic driver for FX3 based LAs)",
 	.api_version = 1,
 	.init = std_init,
 	.cleanup = std_cleanup,

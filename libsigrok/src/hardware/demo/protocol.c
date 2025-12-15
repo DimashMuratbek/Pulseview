@@ -28,8 +28,23 @@
 #include <libsigrok/libsigrok.h>
 #include "libsigrok-internal.h"
 #include "protocol.h"
+#include <stdio.h>      // For file input/output functions
+#include <stdint.h>     // For fixed-size integer types like uint8_t, uint16_t
+#include <stdlib.h>     // For general utilities (e.g. memory, exit)
+#include <string.h>     // For memory operations like memcpy
+#include <unistd.h>     // For UNIX system calls (used for reading)
 
 
+#define MAX_PACKET_SIZE 1024     // Maximum size of any packet we expect
+#define HEADER_MIN_SIZE 10       // Minimum bytes needed to read header (to find packetLength)
+#define PREAMBLE 0xABCD    
+
+
+#define PATTERN_FROM_FILE 5  
+
+#define BUFFER_SIZE 4096
+
+// static FILE *input_file = NULL;
 #define ANALOG_SAMPLES_PER_PERIOD 20
 
 static const uint8_t pattern_sigrok[] = {
@@ -174,8 +189,83 @@ static const uint8_t pattern_squid[128][128 / 8] = {
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, },
 };
 
+
+
+
+
+static uint16_t read_uint16_be(const uint8_t *buf) {
+    return (buf[0] << 8) | buf[1];
+}
+
+// CRC Calculation
+static uint16_t calculate_crc(const uint8_t *data, size_t length) {
+    uint16_t crc = 0;
+    for (size_t i = 0; i < length; i += 2) {
+        uint16_t val = read_uint16_be(&data[i]);
+        crc += val;
+        crc &= 0xFFFF;
+    }
+    return crc;
+}
+
+
+// checksum calculation
+static uint16_t calculate_checksum(const uint8_t *data, size_t length) {
+    uint16_t sum = 0;
+    for (size_t i = 0; i < length; i++) {
+        sum += data[i];
+    }
+    return sum & 0xFFFF;
+}
+
+
+SR_PRIV int fx3_parse_next_packet(const uint8_t *data, size_t len, struct parsed_packet *pkt) {
+    if (len < HEADER_MIN_SIZE)
+        return 0;
+
+    if (read_uint16_be(data) != PREAMBLE)
+        return 2;
+
+    uint16_t packetLength = read_uint16_be(&data[8]);
+    if (packetLength < 26 || packetLength > MAX_PACKET_SIZE || len < packetLength)
+        return 2;
+
+    // uint16_t crc = calculate_crc(data, packetLength - 2);
+    // uint16_t crc16 = read_uint16_be(&data[packetLength - 2]);
+    // if (((crc + crc16) & 0xFFFF) != 0xFFFF)
+    //     return 2;
+
+	uint16_t checksum = calculate_checksum(data, packetLength - 2);
+	uint16_t expected = read_uint16_be(&data[packetLength - 2]);
+	if (checksum != expected)
+		return 2;
+
+    pkt->channel_type = data[2];
+    pkt->channel_number = data[3];
+    uint16_t timestampLow = read_uint16_be(&data[4]);
+    uint16_t timestampHigh = read_uint16_be(&data[6]);
+    pkt->timestamp = ((uint32_t)timestampHigh << 16) | timestampLow;
+
+    int sample_start = 16;
+    int sample_count = (packetLength - 18) / 2;
+
+    pkt->num_samples = sample_count;
+    pkt->samples = g_malloc0(sample_count * sizeof(float));
+    for (int i = 0; i < sample_count; i++) {
+        uint16_t raw = read_uint16_be(&data[sample_start + i * 2]);
+        pkt->samples[i] = (float)raw * 3.3f / 65535.0f;  // Convert to volts
+    }
+
+    return packetLength;
+}
+
+
+
 SR_PRIV void demo_generate_analog_pattern(struct dev_context *devc)
 {
+
+
+	
 	double t, frequency;
 	float amplitude, offset;
 	struct analog_pattern *pattern;
@@ -188,6 +278,7 @@ SR_PRIV void demo_generate_analog_pattern(struct dev_context *devc)
 	amplitude = DEFAULT_ANALOG_AMPLITUDE;
 	offset = DEFAULT_ANALOG_OFFSET;
 
+
 	/*
 	 * FIXME: We actually need only one period. A ringbuffer would be
 	 * useful here.
@@ -196,7 +287,7 @@ SR_PRIV void demo_generate_analog_pattern(struct dev_context *devc)
 	 */
 
 	/* PATTERN_SQUARE: */
-	sr_dbg("Generating %s pattern.", analog_pattern_str[PATTERN_SQUARE]);
+	sr_err("Generating %s pattern.", analog_pattern_str[PATTERN_SQUARE]);
 	pattern = g_malloc(sizeof(struct analog_pattern));
 	value = amplitude;
 	last_end = 0;
@@ -215,7 +306,7 @@ SR_PRIV void demo_generate_analog_pattern(struct dev_context *devc)
 		num_samples--;
 
 	/* PATTERN_SINE: */
-	sr_dbg("Generating %s pattern.", analog_pattern_str[PATTERN_SINE]);
+	sr_err("Generating %s pattern.", analog_pattern_str[PATTERN_SINE]);
 	pattern = g_malloc(sizeof(struct analog_pattern));
 	for (i = 0; i < num_samples; i++) {
 		t = (double) i / (double) devc->cur_samplerate;
@@ -225,7 +316,7 @@ SR_PRIV void demo_generate_analog_pattern(struct dev_context *devc)
 	devc->analog_patterns[PATTERN_SINE] = pattern;
 
 	/* PATTERN_TRIANGLE: */
-	sr_dbg("Generating %s pattern.", analog_pattern_str[PATTERN_TRIANGLE]);
+	sr_err("Generating %s pattern.", analog_pattern_str[PATTERN_TRIANGLE]);
 	pattern = g_malloc(sizeof(struct analog_pattern));
 	for (i = 0; i < num_samples; i++) {
 		t = (double) i / (double) devc->cur_samplerate;
@@ -236,7 +327,7 @@ SR_PRIV void demo_generate_analog_pattern(struct dev_context *devc)
 	devc->analog_patterns[PATTERN_TRIANGLE] = pattern;
 
 	/* PATTERN_SAWTOOTH: */
-	sr_dbg("Generating %s pattern.", analog_pattern_str[PATTERN_SAWTOOTH]);
+	sr_err("Generating %s pattern.", analog_pattern_str[PATTERN_SAWTOOTH]);
 	pattern = g_malloc(sizeof(struct analog_pattern));
 	for (i = 0; i < num_samples; i++) {
 		t = (double) i / (double) devc->cur_samplerate;
@@ -248,10 +339,81 @@ SR_PRIV void demo_generate_analog_pattern(struct dev_context *devc)
 
 	/* PATTERN_ANALOG_RANDOM */
 	/* Data not filled here, will be generated in send_analog_packet(). */
+	// pattern = g_malloc(sizeof(struct analog_pattern));
+	// pattern->num_samples = last_end;
+	// devc->analog_patterns[PATTERN_ANALOG_RANDOM] = pattern;
+
+
+	/* PATTERN_ANALOG_RANDOM — load from test_packets_v1.bin */
+	sr_err("Loading random pattern from test_packets_checksum.bin.");
+
+	FILE *input_file = fopen("test_packets_checksum.bin", "rb");
+	if (!input_file) {
+		sr_err("Failed to open test_packets_checksum.bin.");
+		devc->analog_patterns[PATTERN_ANALOG_RANDOM] = NULL;
+		return;
+	}
+
 	pattern = g_malloc(sizeof(struct analog_pattern));
-	pattern->num_samples = last_end;
+
+	int total_samples = 0;
+	uint8_t buffer[4096];
+	size_t bytes_read, file_offset = 0;
+	sr_err("Before while loop");
+	while ((bytes_read = fread(buffer, 1, sizeof(buffer), input_file)) > 0) {
+		file_offset = 0;
+		while (file_offset < bytes_read) {
+			struct parsed_packet pkt;
+			sr_err("Before fx3_parse_next_packet");
+			// Shit happens after that point, probably th fx3_parse_next_packet
+			int consumed = fx3_parse_next_packet(buffer + file_offset,
+												bytes_read - file_offset, &pkt);
+			if (consumed <= 0)
+				break;
+			sr_err("After copnsumedfmimoie");
+			if (pkt.channel_type == 0xFF) {
+				for (unsigned int j = 0;
+					j < pkt.num_samples && total_samples < ANALOG_BUFSIZE / sizeof(float);
+					++j) {
+					float sample = pkt.samples[j];
+					sr_err("Generating analog pattern: RANDOM — num_samples = %d", pkt.num_samples);
+
+
+					if (!isfinite(sample)) {
+						sr_err("Invalid float at %d, replacing with 0", total_samples);
+						sample = 0.0f;
+					}
+
+					pattern->data[total_samples++] = sample;
+				}
+			}
+
+			file_offset += consumed;
+		}
+	}
+	fclose(input_file);
+
+	// Clamp and validate
+	if (total_samples == 0) {
+		sr_err("No valid analog samples loaded from file.");
+		g_free(pattern);
+		devc->analog_patterns[PATTERN_ANALOG_RANDOM] = NULL;
+		return;
+	}
+	if ((unsigned int)total_samples > ANALOG_BUFSIZE / sizeof(float)) {
+		sr_warn("Sample count exceeded buffer size, clamping.");
+		total_samples = ANALOG_BUFSIZE / sizeof(float);
+	}
+
+	pattern->num_samples = total_samples;
 	devc->analog_patterns[PATTERN_ANALOG_RANDOM] = pattern;
+
+	sr_err("Loaded %d samples into PATTERN_ANALOG_RANDOM.", total_samples);
+
+
+
 }
+
 
 SR_PRIV void demo_free_analog_pattern(struct dev_context *devc)
 {
@@ -260,6 +422,7 @@ SR_PRIV void demo_free_analog_pattern(struct dev_context *devc)
 	g_free(devc->analog_patterns[PATTERN_TRIANGLE]);
 	g_free(devc->analog_patterns[PATTERN_SAWTOOTH]);
 	g_free(devc->analog_patterns[PATTERN_ANALOG_RANDOM]);
+	//g_free(devc->analog_patterns[PATTERN_BINARY]);
 }
 
 static uint64_t encode_number_to_gray(uint64_t nr)
@@ -404,6 +567,7 @@ static void send_analog_packet(struct analog_gen *ag,
 		struct sr_dev_inst *sdi, uint64_t *analog_sent,
 		uint64_t analog_pos, uint64_t analog_todo)
 {
+	sr_err("send_analog_packet(): ENTERED — ag=%p, sdi=%p", (void *)ag, (void *)sdi);
 	struct sr_datafeed_packet packet;
 	struct dev_context *devc;
 	struct analog_pattern *pattern;
@@ -412,6 +576,7 @@ static void send_analog_packet(struct analog_gen *ag,
 	unsigned int i;
 	float amplitude, offset, value;
 	float *data;
+	
 
 	if (!ag->ch || !ag->ch->enabled)
 		return;
@@ -419,6 +584,12 @@ static void send_analog_packet(struct analog_gen *ag,
 	devc = sdi->priv;
 	packet.type = SR_DF_ANALOG;
 	packet.payload = &ag->packet;
+
+	// **************************************************************
+if (!devc) {
+	sr_err("send_analog_packet(): devc is NULL — check setup.");
+	return;
+}
 
 	pattern = devc->analog_patterns[ag->pattern];
 
@@ -496,71 +667,61 @@ static void send_analog_packet(struct analog_gen *ag,
 	else
 		ag->packet.meaning->unit = SR_UNIT_UNITLESS;
 
-	if (!devc->avg) {
+	
+	sr_err("send_analog_packet(): sdi=%p, devc=%p, ag=%p", (void *)sdi, (void *)devc, (void *)ag);
+    sr_err("send_analog_packet(): ag->pattern=%d", ag->pattern);
+
+
+	// NULL ?
+	if (devc && !devc->avg) {
 		ag_pattern_pos = analog_pos % pattern->num_samples;
 		sending_now = MIN(analog_todo, pattern->num_samples - ag_pattern_pos);
-		if (ag->amplitude != DEFAULT_ANALOG_AMPLITUDE ||
-			ag->offset != DEFAULT_ANALOG_OFFSET ||
-			ag->pattern == PATTERN_ANALOG_RANDOM) {
-			/*
-			 * Amplitude or offset changed (or we are generating
-			 * random data), modify each sample.
-			 */
-			if (ag->pattern == PATTERN_ANALOG_RANDOM) {
-				amplitude = ag->amplitude / 500.0;
-				offset = ag->offset - DEFAULT_ANALOG_OFFSET - ag->amplitude;
-			} else {
-				amplitude = ag->amplitude / DEFAULT_ANALOG_AMPLITUDE;
-				offset = ag->offset - DEFAULT_ANALOG_OFFSET;
-			}
-			data = ag->packet.data;
-			for (i = 0; i < sending_now; i++) {
-				if (ag->pattern == PATTERN_ANALOG_RANDOM)
-					data[i] = (rand() % 1000) * amplitude + offset;
-				else
-					data[i] = pattern->data[ag_pattern_pos + i] * amplitude + offset;
-			}
-		} else {
-			/* Amplitude and offset unchanged, use the fast way. */
-			ag->packet.data = pattern->data + ag_pattern_pos;
+
+		// Amplitude/offset handling
+		amplitude = (ag->pattern == PATTERN_ANALOG_RANDOM) ?
+			(ag->amplitude / 1.0f) :
+			(ag->amplitude / DEFAULT_ANALOG_AMPLITUDE);
+		offset = (ag->pattern == PATTERN_ANALOG_RANDOM) ?
+			(ag->offset - DEFAULT_ANALOG_OFFSET - ag->amplitude) :
+			(ag->offset - DEFAULT_ANALOG_OFFSET);
+
+		// Debug print
+		printf("DEBUG: amplitude = %f, offset = %f\n", amplitude, offset);	
+		
+
+		data = ag->packet.data;
+		for (i = 0; i < sending_now; i++) {
+			// Use binary data for RANDOM instead of rand()
+			data[i] = pattern->data[ag_pattern_pos + i];
 		}
+
 		ag->packet.num_samples = sending_now;
 		sr_session_send(sdi, &packet);
-
-		/* Whichever channel group gets there first. */
 		*analog_sent = MAX(*analog_sent, sending_now);
 	} else {
 		ag_pattern_pos = analog_pos % pattern->num_samples;
 		to_avg = MIN(analog_todo, pattern->num_samples - ag_pattern_pos);
-		if (ag->pattern == PATTERN_ANALOG_RANDOM) {
-			amplitude = ag->amplitude / 500.0;
-			offset = ag->offset - DEFAULT_ANALOG_OFFSET - ag->amplitude;
-		} else {
-			amplitude = ag->amplitude / DEFAULT_ANALOG_AMPLITUDE;
-			offset = ag->offset - DEFAULT_ANALOG_OFFSET;
-		}
+
+		amplitude = (ag->pattern == PATTERN_ANALOG_RANDOM) ?
+			(ag->amplitude / 1.0f) :
+			(ag->amplitude / DEFAULT_ANALOG_AMPLITUDE);
+		offset = (ag->pattern == PATTERN_ANALOG_RANDOM) ?
+			(ag->offset - DEFAULT_ANALOG_OFFSET - ag->amplitude) :
+			(ag->offset - DEFAULT_ANALOG_OFFSET);
 
 		for (i = 0; i < to_avg; i++) {
-			if (ag->pattern == PATTERN_ANALOG_RANDOM)
-				value = (rand() % 1000) * amplitude + offset;
-			else
-				value = *(pattern->data + ag_pattern_pos + i) * amplitude + offset;
-			ag->avg_val = (ag->avg_val + value) / 2;
+			value = pattern->data[ag_pattern_pos + i] ;
+			ag->avg_val = (ag->avg_val + value) / 2.0f;
 			ag->num_avgs++;
-			/* Time to send averaged data? */
-			if ((devc->avg_samples > 0) && (ag->num_avgs >= devc->avg_samples))
+
+			if (devc->avg_samples > 0 && ag->num_avgs >= devc->avg_samples)
 				goto do_send;
 		}
 
 		if (devc->avg_samples == 0) {
-			/*
-			 * We're averaging all the samples, so wait with
-			 * sending until the very end.
-			 */
 			*analog_sent = ag->num_avgs;
 			return;
 		}
-
 do_send:
 		ag->packet.data = &ag->avg_val;
 		ag->packet.num_samples = 1;
@@ -573,9 +734,18 @@ do_send:
 	}
 }
 
+
+
+
+
+
+
+
+
 /* Callback handling data */
 SR_PRIV int demo_prepare_data(int fd, int revents, void *cb_data)
 {
+	
 	struct sr_dev_inst *sdi;
 	struct dev_context *devc;
 	struct sr_datafeed_packet packet;
@@ -592,6 +762,16 @@ SR_PRIV int demo_prepare_data(int fd, int revents, void *cb_data)
 	(void)revents;
 
 	sdi = cb_data;
+	// ************************************************************************************
+	// if (!sdi->priv) {
+	// sr_err("Allocating dev_context (sdi->priv was NULL).");
+	// struct dev_context *new_devc = g_malloc0(sizeof(struct dev_context));
+	// new_devc->avg = FALSE;
+	// new_devc->avg_samples = 0;
+	// sdi->priv = new_devc;
+	// }
+	// ************************************************************************************
+
 	devc = sdi->priv;
 
 	/* Just in case. */
@@ -678,7 +858,7 @@ SR_PRIV int demo_prepare_data(int fd, int revents, void *cb_data)
 					sr_session_send(sdi, &packet);
 					logic_done += sending_now - trigger_offset;
 					/* End acquisition */
-					sr_dbg("Triggered, stopping acquisition.");
+					sr_err("Triggered, stopping acquisition.");
 					sr_dev_acquisition_stop(sdi);
 					break;
 				} else {
@@ -719,7 +899,7 @@ SR_PRIV int demo_prepare_data(int fd, int revents, void *cb_data)
 		devc->sent_frame_samples = 0;
 		devc->limit_frames--;
 		if (!devc->limit_frames) {
-			sr_dbg("Requested number of frames reached.");
+			sr_err("Requested number of frames reached.");
 			sr_dev_acquisition_stop(sdi);
 		}
 	}
@@ -739,12 +919,14 @@ SR_PRIV int demo_prepare_data(int fd, int revents, void *cb_data)
 				sr_session_send(sdi, &packet);
 			}
 		}
-		sr_dbg("Requested number of samples reached.");
+		sr_err("Requested number of samples reached.");
 		sr_dev_acquisition_stop(sdi);
 	} else if (devc->limit_frames) {
 		if (devc->sent_frame_samples == 0)
 			std_session_send_df_frame_begin(sdi);
 	}
+
+	
 
 	return G_SOURCE_CONTINUE;
 }

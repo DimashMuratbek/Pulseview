@@ -27,8 +27,14 @@
 #include <stdint.h>
 #include <libsigrok/libsigrok.h>
 #include "libsigrok-internal.h"
+#include <stdbool.h>
+
 
 #define LOG_PREFIX "demo"
+
+
+#define FX3_MAX_SAMPLES 10 // for parsing test
+
 
 /* The size in bytes of chunks to send through the session bus. */
 #define LOGIC_BUFSIZE			4096
@@ -96,6 +102,7 @@ enum analog_pattern_type {
 	PATTERN_TRIANGLE,
 	PATTERN_SAWTOOTH,
 	PATTERN_ANALOG_RANDOM,
+	//PATTERN_BINARY,
 };
 
 static const char *analog_pattern_str[] = {
@@ -104,12 +111,16 @@ static const char *analog_pattern_str[] = {
 	"triangle",
 	"sawtooth",
 	"random",
+	//"binary",
 };
 
 struct analog_pattern {
 	float data[ANALOG_BUFSIZE];
 	unsigned int num_samples;
 };
+
+
+SR_PRIV int demo_dev_open(struct sr_dev_inst *sdi);
 
 struct dev_context {
 	uint64_t cur_samplerate;
@@ -144,6 +155,19 @@ struct dev_context {
 	struct soft_trigger_logic *stl;
 };
 
+
+struct parsed_packet {
+    uint8_t channel_type;
+    uint8_t channel_number;
+    uint32_t timestamp;
+    unsigned int num_samples;
+    float *samples;
+};
+// Parses the next valid packet in the buffer.
+// Returns number of bytes consumed, or 0 if no packet, or negative on error.
+//int fx3_parse_next_packet(const uint8_t *buf, size_t buf_len, struct parsed_packet *pkt);
+
+
 struct analog_gen {
 	struct sr_channel *ch;
 	enum sr_mq mq;
@@ -158,9 +182,13 @@ struct analog_gen {
 	struct sr_analog_spec spec;
 	float avg_val; /* Average value */
 	unsigned int num_avgs; /* Number of samples averaged */
+	bool enabled;
 };
 
-SR_PRIV void demo_generate_analog_pattern(struct dev_context *devc);
+SR_PRIV int fx3_parse_next_packet(const uint8_t *data, size_t len, struct parsed_packet *pkt);
+
+SR_PRIV void demo_generate_analog_pattern(struct dev_context *devc);  // struct dev_context *devc
+
 SR_PRIV void demo_free_analog_pattern(struct dev_context *devc);
 SR_PRIV int demo_prepare_data(int fd, int revents, void *cb_data);
 
