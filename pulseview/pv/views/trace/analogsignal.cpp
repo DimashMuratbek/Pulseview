@@ -98,10 +98,6 @@ const int AnalogSignal::InfoTextMarginBottom = 5;
 
 AnalogSignal::AnalogSignal(pv::Session &session, shared_ptr<data::SignalBase> base) :
 	LogicSignal(session, base),
-	//signal_min_(std::numeric_limits<double>::quiet_NaN()),
-	//signal_max_(std::numeric_limits<double>::quiet_NaN()),
-
-
 	value_at_hover_pos_(std::numeric_limits<float>::quiet_NaN()),
 	scale_index_(4), // 20 per div
 	pos_vdivs_(1),
@@ -118,6 +114,13 @@ AnalogSignal::AnalogSignal(pv::Session &session, shared_ptr<data::SignalBase> ba
 	connect(analog_data, SIGNAL(min_max_changed(float, float)),
 		this, SLOT(on_min_max_changed(float, float)));
 
+	
+	fprintf(stderr, "analog_data ptr=%p type=%s\n",
+        (void*)analog_data,
+        analog_data ? typeid(*analog_data).name() : "null");
+
+	
+
 	GlobalSettings settings;
 	show_sampling_points_ =
 		settings.value(GlobalSettings::Key_View_ShowSamplingPoints).toBool();
@@ -133,6 +136,8 @@ AnalogSignal::AnalogSignal(pv::Session &session, shared_ptr<data::SignalBase> ba
 
 	update_logic_level_offsets();
 	update_scale();
+
+	
 }
 
 std::map<QString, QVariant> AnalogSignal::save_settings() const
@@ -307,8 +312,18 @@ void AnalogSignal::paint_fore(QPainter &p, ViewItemPaintParams &pp)
 
 		QString infotext;
 
+		// const double abs_max = std::max(std::fabs(signal_max_), std::fabs(signal_min_));
+		// qDebug() << "prefix_input abs_max=" << abs_max
+        //    << "min=" << signal_min_ << "max=" << signal_max_
+        //    << "autoranging=" << autoranging_
+        //    << "hover=" << value_at_hover_pos_;
+		if (signal_min_ == 0 && signal_max_ == 0 && std::isfinite(value_at_hover_pos_)) {
+    		signal_min_ = value_at_hover_pos_ - 1;
+  		  	signal_max_ = value_at_hover_pos_ + 1;
+		}
 
-		// Print debug info to see what causing yV
+
+		//Print debug info to see what causing yV
         qDebug() << "[AnalogSignal::paint_fore]"
                  << "signal_min=" << signal_min_
                  << "signal_max=" << signal_max_
@@ -317,22 +332,25 @@ void AnalogSignal::paint_fore(QPainter &p, ViewItemPaintParams &pp)
                  << "isnan(hover)=" << std::isnan(value_at_hover_pos_)
                  << "resolution(V/div)=" << resolution_;
 
+		
+		
+
 		SIPrefix prefix;
 
-		// Prefer hover value when available (display actual values)
-		if (show_hover_marker_ && !std::isnan(value_at_hover_pos_)) {
-			prefix = determine_value_prefix(std::fabs(value_at_hover_pos_));
-		} else {
-			// Fallback to range-based prefix, but guard against 0/garbage
-			const double abs_max = std::max(std::fabs(signal_max_), std::fabs(signal_min_));
-			prefix = determine_value_prefix(abs_max > 0.0 ? abs_max : 1.0); // 1.0V safe default
-		}
+		// Prefer hover value when available (display actual values) Used to fix yV problem
+		// if (show_hover_marker_ && !std::isnan(value_at_hover_pos_)) {
+		// 	prefix = determine_value_prefix(std::fabs(value_at_hover_pos_));
+		// } else {
+		// 	// Fallback to range-based prefix, but guard against 0/garbage
+		// 	const double abs_max = std::max(std::fabs(signal_max_), std::fabs(signal_min_));
+		// 	prefix = determine_value_prefix(abs_max > 0.0 ? abs_max : 1.0); // 1.0V safe default
+		// }
 
 		// Determine the SI prefix to use for the info text (Original code)
-		// if (fabs(signal_max_) > fabs(signal_min_))
-		// 	prefix = determine_value_prefix(fabs(signal_max_));
-		// else
-		// 	prefix = determine_value_prefix(fabs(signal_min_));
+		if (fabs(signal_max_) > fabs(signal_min_))
+			prefix = determine_value_prefix(fabs(signal_max_));
+		else
+			prefix = determine_value_prefix(fabs(signal_min_));
 
 		// Show the info section on the right side of the trace, including
 		// the value at the hover point when the hover marker is enabled
@@ -694,7 +712,9 @@ void AnalogSignal::perform_autoranging(bool keep_divs, bool force_update)
 	if (segments.empty())
 		return;
 
-	double min = 0, max = 0;
+	double min = 0, max = 0; 
+
+	//float min = 0, max = 0; 
 
 	// double min =  std::numeric_limits<double>::infinity();
 	// double max = -std::numeric_limits<double>::infinity();
@@ -706,10 +726,9 @@ void AnalogSignal::perform_autoranging(bool keep_divs, bool force_update)
 		max = std::max(max, mm.second);
 	}
 
-	
 
-	// if (!std::isfinite(min) || !std::isfinite(max))
-    // return;
+	fprintf(stderr, "divs: pos=%d neg=%d\n", pos_vdivs_, neg_vdivs_);
+	fflush(stderr);
 
 
 
@@ -985,8 +1004,15 @@ void AnalogSignal::on_setting_changed(const QString &key, const QVariant &value)
 
 void AnalogSignal::on_min_max_changed(float min, float max)
 {
+	qWarning() << "[min_max_changed]" << "this=" << this
+               << "min=" << min << "max=" << max;
+
+    signal_min_ = min;
+    signal_max_ = max;
+
+
 	if (autoranging_)
-		perform_autoranging(false, true);
+		perform_autoranging(false, false);
 	else {
 		if (min < signal_min_) signal_min_ = min;
 		if (max > signal_max_) signal_max_ = max;
