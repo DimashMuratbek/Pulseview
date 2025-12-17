@@ -253,7 +253,8 @@ SR_PRIV int fx3_parse_next_packet(const uint8_t *data, size_t len, struct parsed
     pkt->samples = g_malloc0(sample_count * sizeof(float));
     for (int i = 0; i < sample_count; i++) {
         uint16_t raw = read_uint16_be(&data[sample_start + i * 2]);
-        pkt->samples[i] = (float)raw * 3.3f / 65535.0f;  // Convert to volts
+        pkt->samples[i] = (float)raw * 6.3f / 65535.0f;  // Convert to volts
+		//pkt->samples[i] = (raw / 255.0f) * 30.0f;
     }
 
     return packetLength;

@@ -317,7 +317,7 @@ int fx3driver_parse_next_packet(const uint8_t *data, size_t len, struct parsed_p
 		sr_err("Dumping raw analog payload:");
 		for (size_t i = 0; i < sample_bytes; i++) {
 			uint8_t raw = pkt_data[sample_data_offset + i];
-			float v = (raw / 255.0f) * 10.0f;
+			float v = -((raw / 255.0f) * 30.0f);
 			sr_err("RAW[%02zu] = 0x%02X -> %.3f V", i, raw, v);
 		}
 
@@ -325,7 +325,10 @@ int fx3driver_parse_next_packet(const uint8_t *data, size_t len, struct parsed_p
 		sr_err("Analog samples per channel: %zu", pkt->num_samples);
 		
 		sr_err("NUMBER OF CHANNELS : %zu", pkt->channel_number);
+		
 
+		memset(pkt->analog_samples, 0, num_samples_per_channel * num_channels * sizeof(float));
+  
 		for (size_t ch = 0; ch < num_channels; ch++) {
 			for (size_t s = 0; s < num_samples_per_channel; s++) {
 				size_t index = sample_data_offset + (ch * num_samples_per_channel) + s;
@@ -336,7 +339,7 @@ int fx3driver_parse_next_packet(const uint8_t *data, size_t len, struct parsed_p
 				}
 
 				uint8_t raw = pkt_data[index];
-				float voltage = (raw / 255.0f) * 10.0f;
+				float voltage = -((raw / 255.0f) * 4.0f);
 				//float voltage = (float)raw * 3.3f / 65535.0f;
 
 
@@ -1390,7 +1393,10 @@ SR_PRIV int cypress_fx3_start_acquisition(const struct sr_dev_inst *sdi)
 	if (g_slist_length(devc->enabled_analog_channels) > 0) {
 		/* We need a buffer half the size of a transfer. */
 		devc->logic_buffer = g_try_malloc(size);
-		devc->analog_buffer = g_try_malloc(sizeof(float) * size * NUM_ANALOG_CHANNELS); // mutliply by 8 because we have 8 channels
+		//devc->analog_buffer = g_try_malloc(sizeof(float) * size * NUM_ANALOG_CHANNELS); // mutliply by 8 because we have 8 channels
+		devc->analog_buffer = g_try_malloc(sizeof(float) * size);
+		if (devc->analog_buffer)
+  			memset(devc->analog_buffer, 0, sizeof(float) * size);
 	}
 	start_transfers(sdi);
 	if ((ret = command_start_acquisition(sdi)) != SR_OK) {
