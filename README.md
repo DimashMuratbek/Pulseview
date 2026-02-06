@@ -2,7 +2,7 @@
 
 This repository is current setup on computer.
 
-run getlibs.sh to install pulsview, libsigrok and libsigrok-decode
+run getlibs.sh to install pulseview, libsigrok and libsigrokdecode
 
 
 ## Related Repositories
